@@ -1,0 +1,75 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property integer $quantity
+ * @property integer $order_new_product_id
+ * @property integer $delivery_header_id
+ * @property integer $is_inactive
+ * @property string $product_name
+ * @property integer $receive_new_product_id
+ * @property integer $quantity_return
+ *
+ * @property ReceiveNewProduct $receiveNewProduct
+ * @property OrderNewProduct $orderNewProduct
+ * @property DeliveryHeader $deliveryHeader
+ * @property SaleReturnNewProduct[] $saleReturnNewProducts
+ * @property InvoiceNewProduct[] $invoiceNewProducts
+ */
+class DeliveryNewProductBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_delivery_new_product';
+    }
+
+    public function rules() {
+        return array(
+            array('order_new_product_id, delivery_header_id, is_inactive', 'required'),
+            array('quantity, order_new_product_id, delivery_header_id, is_inactive, receive_new_product_id, quantity_return', 'numerical', 'integerOnly' => true),
+            array('product_name', 'length', 'max' => 300),
+            // The following rule is used by search().
+            array('id, quantity, order_new_product_id, delivery_header_id, is_inactive, product_name, receive_new_product_id, quantity_return', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'receiveNewProduct' => array(self::BELONGS_TO, 'ReceiveNewProduct', 'receive_new_product_id'),
+            'orderNewProduct' => array(self::BELONGS_TO, 'OrderNewProduct', 'order_new_product_id'),
+            'deliveryHeader' => array(self::BELONGS_TO, 'DeliveryHeader', 'delivery_header_id'),
+            'saleReturnNewProducts' => array(self::HAS_MANY, 'SaleReturnNewProduct', 'delivery_new_product_id'),
+            'invoiceNewProducts' => array(self::HAS_MANY, 'InvoiceNewProduct', 'delivery_new_product_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'quantity' => 'Quantity',
+            'order_new_product_id' => 'Order New Product',
+            'delivery_header_id' => 'Delivery Header',
+            'is_inactive' => 'Is Inactive',
+            'product_name' => 'Product Name',
+            'receive_new_product_id' => 'Receive New Product',
+            'quantity_return' => 'Quantity Return',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('quantity', $this->quantity);
+        $criteria->compare('order_new_product_id', $this->order_new_product_id);
+        $criteria->compare('delivery_header_id', $this->delivery_header_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('product_name', $this->product_name, true);
+        $criteria->compare('receive_new_product_id', $this->receive_new_product_id);
+        $criteria->compare('quantity_return', $this->quantity_return);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+}

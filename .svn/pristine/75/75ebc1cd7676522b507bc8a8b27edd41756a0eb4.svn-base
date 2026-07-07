@@ -1,0 +1,495 @@
+<?php
+
+class OrderHeader extends OrderHeaderBase {
+    const TAX = 0;
+    const NON_TAX = 1;
+
+    const TAX_LITERAL = 'PPN';
+    const NON_TAX_LITERAL = 'Non PPN';
+
+    const INCLUDE_TAX = 0;
+    const NON_INCLUDE = 1;
+
+    const INCLUDE_TAX_LITERAL = 'Include';
+    const NON_INCLUDE_LITERAL = 'Exclude';
+
+    const NOT_APPROVED = 0;
+    const APPROVED = 1;
+
+    const NOT_APPROVED_LITERAL = 'Not Approved';
+    const APPROVED_LITERAL = 'Approved';
+
+    const CLEARED = 1;
+    const HOLD = 2;
+    const CANCELED = 3;
+
+    const CLEARED_LITERAL = 'Cleared';
+    const HOLD_LITERAL = 'On Hold';
+    const CANCELED_LITERAL = 'Canceled';
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function onHoldStatus() {
+        switch ($this->is_hold) {
+            case 1: return 'Cleared ';
+            case 2: return 'On Hold ';
+            case 3: return 'Canceled ';
+            default: return 'N/A';
+        }
+    }
+
+    public function getTaxStatus() {
+        return (int)$this->is_tax === self::TAX ? self::TAX_LITERAL : self::NON_TAX_LITERAL;
+    }
+    
+    public function getTaxValue() {
+        return (int)$this->is_include === self::INCLUDE_TAX ? self::INCLUDE_TAX_LITERAL : self::NON_INCLUDE_LITERAL;
+    }
+    
+    public function searchByPurchase() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "EXISTS (
+            SELECT quantity_single - quantity_purchase AS remaining
+            FROM " . OrderDetail::model()->tableName() . "
+            WHERE t.id = order_header_id AND is_inactive = 0
+            HAVING remaining > 0
+            UNION ALL
+            SELECT quantity - quantity_purchase AS remaining
+            FROM " . OrderNewProduct::model()->tableName() . "
+            WHERE t.id = order_header_id AND is_inactive = 0
+            HAVING remaining > 0
+        ) AND EXISTS (
+            SELECT quantity_remaining AS remaining
+            FROM " . OrderDetail::model()->tableName() . "
+            WHERE t.id = order_header_id AND is_inactive = 0
+            HAVING remaining > 0
+            UNION ALL
+            SELECT quantity_remaining AS remaining
+            FROM " . OrderNewProduct::model()->tableName() . "
+            WHERE t.id = order_header_id AND is_inactive = 0
+            HAVING remaining > 0
+        ) AND t.is_inactive = 0";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.customer_id', $this->customer_id, true);
+        $criteria->compare('t.admin_id', $this->admin_id, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.reference_number', $this->reference_number, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchByDelivery() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "EXISTS (
+            SELECT sale.quantity_remaining
+            FROM " . OrderDetail::model()->tableName() . " sale
+            WHERE t.id = sale.order_header_id AND sale.is_inactive = 0
+            HAVING sale.quantity_remaining > 0
+            UNION ALL
+            SELECT sale.quantity_receive_remaining
+            FROM " . OrderNewProduct::model()->tableName() . " sale
+            WHERE t.id = sale.order_header_id AND sale.is_inactive = 0
+            HAVING sale.quantity_receive_remaining > 0
+        ) AND t.date > '2020-03-31' AND t.is_inactive = 0";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.customer_id', $this->customer_id, true);
+        $criteria->compare('t.admin_id', $this->admin_id, true);
+        $criteria->compare('t.reference_number', $this->reference_number, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchByInvoice() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "EXISTS (
+            SELECT order_header_id
+            FROM " . OrderDetail::model()->tableName() . " 
+            WHERE t.id = order_header_id AND is_inactive = 0 AND quantity_single - quantity_invoice > 0
+            UNION ALL
+            SELECT order_header_id
+            FROM " . OrderNewProduct::model()->tableName() . " 
+            WHERE t.id = order_header_id AND is_inactive = 0 AND quantity - quantity_invoice > 0
+        ) AND t.date > '2021-03-31' AND t.is_inactive = 0";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.customer_id', $this->customer_id, true);
+        $criteria->compare('t.admin_id', $this->admin_id, true);
+        $criteria->compare('t.reference_number', $this->reference_number, true);
+        $criteria->compare('t.is_tax', $this->is_tax);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchBySalesman() {
+        $criteria = new CDbCriteria;
+
+        $criteria->with = 'customer';
+        $criteria->addCondition('customer.salesman_id IS NOT NULL');
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchByPackingList() {
+        //search sale header which sold quantity is not fully delivered yet
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "EXISTS (
+            SELECT s.quantity_single - d.quantity_packing AS quantity_remaining
+            FROM " . OrderDetail::model()->tableName() . " s
+            LEFT OUTER JOIN (
+                SELECT order_detail_id, SUM(COALESCE(quantity, 0)) AS quantity_packing 
+                FROM " . PackingListDetail::model()->tableName() . " 
+                WHERE is_inactive = 0
+                GROUP BY order_detail_id
+            ) d ON s.id = d.order_detail_id
+            WHERE t.id = s.order_header_id AND s.is_inactive = 0 AND s.quantity_single - d.quantity_packing > 0
+        ) AND t.date > '2024-03-31' AND t.is_inactive = 0";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', 0);
+        $criteria->compare('t.reference_number', $this->reference_number, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchByOutstanding() {
+        $criteria = new CDbCriteria;
+
+//        $criteria->condition = "EXISTS (
+//            SELECT quantity_single - quantity_invoice AS remaining
+//            FROM " . OrderDetail::model()->tableName() . " 
+//            WHERE t.id = order_header_id AND is_inactive = 0
+//            HAVING remaining > 0
+//            UNION ALL
+//            SELECT quantity - quantity_invoice AS remaining
+//            FROM " . OrderNewProduct::model()->tableName() . " 
+//            WHERE t.id = order_header_id AND is_inactive = 0
+//            HAVING remaining > 0
+//        ) AND t.date > '2023-12-31' AND t.is_inactive = 0";
+
+        $criteria->condition = "t.date > '2023-12-31' AND t.is_inactive = 0 AND round(t.sub_total * (1 + (t.tax/100)), 2) - (
+            SELECT SUM(grand_total) AS grand_total
+            FROM " . InvoiceHeader::model()->tableName() . "
+            WHERE is_inactive = 0 AND order_header_id = t.id
+        ) > 100";
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('number', $this->number, true);
+        $criteria->compare('date', $this->date, true);
+        $criteria->compare('deposit', $this->deposit, true);
+        $criteria->compare('reference_number', $this->reference_number, true);
+        $criteria->compare('shipping_fee', $this->shipping_fee, true);
+        $criteria->compare('tax', $this->tax);
+        $criteria->compare('note_external', $this->note_external, true);
+        $criteria->compare('note_internal', $this->note_internal, true);
+        $criteria->compare('admin_edit_list', $this->admin_edit_list, true);
+        $criteria->compare('customer_id', $this->customer_id);
+        $criteria->compare('branch_id', $this->branch_id);
+        $criteria->compare('admin_id', $this->admin_id);
+        $criteria->compare('is_tax', $this->is_tax);
+        $criteria->compare('is_include', $this->is_include);
+        $criteria->compare('is_approved', $this->is_approved);
+        $criteria->compare('is_hold', $this->is_hold);
+        $criteria->compare('is_inactive', $this->is_inactive);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 500,
+            )
+        ));        
+    }
+    
+    public function searchWithoutPaging() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.id NOT IN (
+            SELECT order_header_id 
+            FROM " . PackingListDetail::model()->tableName() . " 
+            WHERE is_inactive = 0
+        ) AND t.is_inactive = 0";
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('number', $this->number, true);
+        $criteria->compare('date', $this->date, true);
+        $criteria->compare('deposit', $this->deposit, true);
+        $criteria->compare('reference_number', $this->reference_number, true);
+        $criteria->compare('shipping_fee', $this->shipping_fee, true);
+        $criteria->compare('tax', $this->tax);
+        $criteria->compare('note_external', $this->note_external, true);
+        $criteria->compare('note_internal', $this->note_internal, true);
+        $criteria->compare('admin_edit_list', $this->admin_edit_list, true);
+        $criteria->compare('customer_id', $this->customer_id);
+        $criteria->compare('branch_id', $this->branch_id);
+        $criteria->compare('admin_id', $this->admin_id);
+        $criteria->compare('is_tax', $this->is_tax);
+        $criteria->compare('is_include', $this->is_include);
+        $criteria->compare('is_approved', $this->is_approved);
+        $criteria->compare('is_hold', $this->is_hold);
+        $criteria->compare('is_inactive', $this->is_inactive);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->orderDetails as $detail) {
+            if ($detail->is_inactive == 0) {
+                $total += $detail->total;
+            }
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->orderNewProducts as $newProduct) {
+            if ($newProduct->is_inactive == 0) {
+                $total += $newProduct->total;
+            }
+        }
+
+        return $total;
+    }
+
+    public function getSubTotal() {
+        $subTotal = $this->totalDetail + $this->totalNewProduct;
+
+        if ((int) $this->is_tax === self::TAX && (int) $this->is_include === self::INCLUDE_TAX) {
+            $subTotal = $subTotal / (1 + ($this->tax / 100));
+        }
+
+        return $subTotal;
+    }
+
+    public function getTotalTax() {
+
+        return ((int) $this->is_tax === OrderHeader::TAX) ? $this->subTotal * $this->tax / 100 : 0;
+    }
+
+    public function getGrandTotal() {
+
+        return $this->subTotal + $this->totalTax - $this->deposit + $this->shipping_fee;
+    }
+
+    public function getTotalInvoice() {
+        $total = 0.00;
+
+        foreach ($this->invoiceHeaders as $detail) {
+            $grandTotal = (int) $detail->is_inactive == 0 ? $detail->grandTotal : 0.00;
+            $total += $grandTotal;
+        }
+
+        return $total;
+    }
+
+    public function getPayment() {
+        $payment = 0.00;
+
+        foreach ($this->invoiceHeaders as $invoiceHeader) {
+            foreach ($invoiceHeader->saleReceiptDetails as $receiptHeader) {
+                foreach ($receiptHeader->saleReceiptHeader->salePaymentHeaders as $receiptDetails) {
+                    foreach ($receiptDetails->salePaymentDetails as $paymentDetail) {
+                        $payment += $paymentDetail->amount;
+                    }
+                }
+            }
+        }
+
+        return $payment;
+    }
+
+    public function getRemaining() {
+        return $this->grandTotal - $this->payment;
+    }
+
+    public function getSubTotalReceipt() {
+        $total = $this->subTotal;
+
+        foreach ($this->saleReturnHeaders as $header) {
+            $total -= $header->getGrandTotal($header->order_header_id);
+        }
+
+        return $total;
+    }
+
+    public function getGrandTotalReceipt() {
+        return $this->subTotalReceipt - $this->deposit + $this->shipping_fee;
+    }
+
+    public function getOrderStatus() {
+
+        $sql = "SELECT quantity_single - quantity_purchase AS remaining
+                FROM " . OrderDetail::model()->tableName() . "
+                WHERE order_header_id = :order_header_id AND quantity_single - quantity_purchase > 0 AND is_inactive = 0";
+        
+        $resultSet = CActiveRecord::$db->createCommand($sql)->queryAll(true, array(':order_header_id' => $this->id));
+
+        return (count($resultSet) === 0) ? 'Close' : 'Open';
+    }
+
+    public static function makeChartAxisY($chartData, $part) {
+        $total = 0;
+        foreach ($chartData as $data) {
+            if ($total < $data[1]) {
+                $total = $data[1];
+            }
+        }
+
+        $top = $total * (1 + 1 / ($part * 2));
+
+        $n = 0;
+        while (floor($top) >= 100) {
+            $top /= 10;
+            $n++;
+        }
+
+        $top = floor($top);
+
+        $top += $part - $top % $part;
+
+        for ($i = 0; $i < $n; $i++) {
+            $top *= 10;
+        }
+
+        return array('min' => 0, 'max' => $top, 'tickSize' => floor($top / $part));
+    }
+
+    public static function makeChartAxisX($chartData) {
+        $labels = array();
+        foreach ($chartData as $data) {
+            $labels[] = array($data[0], substr($data[2], 6, 8));
+        }
+
+        return array('min' => 0, 'max' => count($chartData) + 1, 'ticks' => $labels);
+    }
+
+    public static function makeChartData($backNum) {
+        $data = array();
+        $data['color'] = 'green';
+        $data['data'] = array();
+
+        $dataRows = array();
+        $dateList = array();
+        for ($i = $backNum; $i >= 0; $i--) {
+            $date = date('Y-m', strtotime("-{$i} months"));
+            $dataRows[$date] = array('grand_total' => 0);
+            $dateList[] = $date;
+        }
+
+        $sql = "SELECT SUBSTRING(h.date, 1, 7) AS date, SUM(d.total - h.deposit + h.shipping_fee) AS grand_total
+                FROM " . OrderHeader::model()->tableName() . " h
+                INNER JOIN (
+                    SELECT order_header_id, SUM(
+                        quantity_bulk * unit_price_bulk * (1 + (discount_1 / 100))  * (1 + (discount_2 / 100)) * 
+                        (1 + (discount_3 / 100)) * (1 + (discount_4 / 100)) * (1 + (discount_5 / 100))
+                    ) AS total 
+                    FROM " . OrderDetail::model()->tableName() . " 
+                    GROUP BY order_header_id 
+                ) d ON h.id = d.order_header_id 
+                WHERE SUBSTRING(h.date, 1, 7) <= :end AND SUBSTRING(h.date, 1, 7) >= :start
+                GROUP BY SUBSTRING(h.date, 1, 7)";
+
+        $rows = CActiveRecord::$db->createCommand($sql)->queryAll(true, array(
+            ':start' => $dateList[0],
+            ':end' => $dateList[$backNum],
+        ));
+
+        foreach ($rows as $row) {
+            if (in_array($row['date'], $dateList)) {
+                $dataRows[$row['date']]['grand_total'] = $row['grand_total'];
+            }
+        }
+
+        $counter = 1;
+        foreach ($dataRows as $dateLiteral => $dataRow) {
+            $tickLabel = date('M Y', strtotime($dateLiteral));
+            $total = number_format($dataRow['grand_total'], 2);
+            $tooltip = "DATE: {$tickLabel}<br />TOTAL: {$total}";
+            $data['data'][] = array($counter, $dataRow['grand_total'], $tooltip);
+            $counter++;
+        }
+
+        return $data;
+    }
+
+    public function getPurchaseNumber() {
+        $purchaseHeaders = array();
+
+        foreach ($this->purchaseHeaders as $purchaseHeader) {
+            $purchaseHeaders[] = $purchaseHeader->number . ', ';
+        }
+
+        return implode('', $purchaseHeaders);
+    }
+
+    public function getDeliveryNumber() {
+        $deliveryHeaders = array();
+
+        foreach ($this->deliveryHeaders as $deliveryHeader) {
+            $deliveryHeaders[] = $deliveryHeader->number . ', ';
+        }
+
+        return implode('', $deliveryHeaders);
+    }
+
+    public function getInvoiceNumber() {
+        $invoiceHeaders = array();
+
+        foreach ($this->invoiceHeaders as $invoiceHeader) {
+            $invoiceHeaders[] = $invoiceHeader->number . ', ';
+        }
+
+        return implode('', $invoiceHeaders);
+    }
+    
+    public static function getMonthlyUserOrderHeaderReport($year, $month) {
+        $params = array(
+            ':year' => $year,
+            ':month' => $month,
+        );
+        
+        $sql = "SELECT i.admin_id, MAX(a.name) AS employee_name, COUNT(i.id) AS invoice_quantity, COUNT(DISTINCT i.customer_id) AS customer_quantity,
+                    SUM(i.sub_total * (1 + i.tax / 100) - i.deposit + i.shipping_fee) AS invoice_total
+                FROM " . OrderHeader::model()->tableName() . " i
+                INNER JOIN " . Admin::model()->tableName() . " a ON a.id = i.admin_id
+                WHERE YEAR(i.date) = :year AND MONTH(i.date) = :month AND i.admin_id IS NOT NULL AND i.is_inactive = 0
+                GROUP BY i.admin_id
+                ORDER BY MAX(a.name) ASC";
+                
+        $resultSet = Yii::app()->db->createCommand($sql)->queryAll(true, $params);
+        
+        return $resultSet;
+    }
+}

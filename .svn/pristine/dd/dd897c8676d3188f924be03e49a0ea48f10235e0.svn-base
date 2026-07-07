@@ -1,0 +1,41 @@
+<?php
+$this->breadcrumbs = array(
+    'Branches' => array('admin'),
+    $model->name,
+);
+
+$this->menu = array(
+    array('label' => 'Create Branch', 'url' => array('create')),
+    array('label' => 'Update Branch', 'url' => array('update', 'id' => $model->id)),
+    array('label' => 'Manage Branch', 'url' => array('admin')),
+);
+?>
+
+<h1>View Branch #<?php echo $model->id; ?></h1>
+
+<?php
+$this->widget('zii.widgets.CDetailView', array(
+    'data' => $model,
+    'cssFile' => Yii::app()->baseUrl . '/css/transaction/detailview/styles.css',
+    'attributes' => array(
+        'id',
+        'name',
+        'address',
+        'tax_number',
+        'phone',
+        'fax',
+        'bank_name',
+        'bank_account_name',
+        'bank_account_number',
+        'invoice_note',
+        array(
+            'label' => 'Status',
+            'value' => $model->status(),
+        ),
+    ),
+));
+?>
+
+<div style="text-align: center">
+<?php echo CHtml::image(Yii::app()->request->baseUrl . '/images/' . CHtml::encode(CHtml::value($model, 'filename')), CHtml::encode(CHtml::value($model, 'filename'))); ?>
+</div>

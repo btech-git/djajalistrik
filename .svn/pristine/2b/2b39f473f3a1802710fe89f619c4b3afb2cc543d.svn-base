@@ -1,0 +1,113 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property string $code
+ * @property string $name
+ * @property integer $quantity
+ * @property string $unit_price
+ * @property string $discount_1
+ * @property string $discount_2
+ * @property string $discount_3
+ * @property string $discount_4
+ * @property string $discount_5
+ * @property integer $unit_id
+ * @property integer $order_header_id
+ * @property integer $is_inactive
+ * @property integer $quantity_delivery
+ * @property integer $quantity_remaining
+ * @property integer $quantity_purchase
+ * @property integer $quantity_invoice
+ * @property integer $quantity_receive
+ * @property integer $quantity_receive_remaining
+ * @property string $unit_price_after_discount
+ *
+ * @property DeliveryNewProduct[] $deliveryNewProducts
+ * @property Unit $unit
+ * @property OrderHeader $orderHeader
+ * @property PurchaseNewProduct[] $purchaseNewProducts
+ * @property ReceiveNewProduct[] $receiveNewProducts
+ */
+class OrderNewProductBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_order_new_product';
+    }
+
+    public function rules() {
+        return array(
+            array('name, unit_id, order_header_id', 'required'),
+            array('quantity, unit_id, order_header_id, is_inactive, quantity_delivery, quantity_remaining, quantity_purchase, quantity_invoice, quantity_receive, quantity_receive_remaining', 'numerical', 'integerOnly' => true),
+            array('code', 'length', 'max' => 60),
+            array('name', 'length', 'max' => 300),
+            array('unit_price, discount_1, discount_2, discount_3, discount_4, discount_5, unit_price_after_discount', 'length', 'max' => 18),
+            // The following rule is used by search().
+            array('id, code, name, quantity, unit_price, discount_1, discount_2, discount_3, discount_4, discount_5, unit_id, order_header_id, is_inactive, quantity_delivery, quantity_remaining, quantity_purchase, quantity_invoice, unit_price_after_discount, quantity_receive, quantity_receive_remaining', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'deliveryNewProducts' => array(self::HAS_MANY, 'DeliveryNewProduct', 'order_new_product_id'),
+            'unit' => array(self::BELONGS_TO, 'Unit', 'unit_id'),
+            'orderHeader' => array(self::BELONGS_TO, 'OrderHeader', 'order_header_id'),
+            'purchaseNewProducts' => array(self::HAS_MANY, 'PurchaseNewProduct', 'order_new_product_id'),
+            'receiveNewProducts' => array(self::HAS_MANY, 'ReceiveNewProduct', 'order_new_product_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'code' => 'Code',
+            'name' => 'Name',
+            'quantity' => 'Quantity',
+            'unit_price' => 'Unit Price',
+            'discount_1' => 'Discount 1',
+            'discount_2' => 'Discount 2',
+            'discount_3' => 'Discount 3',
+            'discount_4' => 'Discount 4',
+            'discount_5' => 'Discount 5',
+            'unit_id' => 'Unit',
+            'order_header_id' => 'Order Header',
+            'is_inactive' => 'Is Inactive',
+            'quantity_delivery' => 'Quantity Delivery',
+            'quantity_remaining' => 'Quantity Remaining',
+            'quantity_purchase' => 'Quantity Purchase',
+            'quantity_invoice' => 'Quantity Invoice',
+            'quantity_receive' => 'Quantity Receive',
+            'quantity_receive_remaining' => 'Receive Remaining',
+            'unit_price_after_discount' => 'Unit Price After Discount',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('code', $this->code, true);
+        $criteria->compare('name', $this->name, true);
+        $criteria->compare('quantity', $this->quantity);
+        $criteria->compare('unit_price', $this->unit_price, true);
+        $criteria->compare('discount_1', $this->discount_1, true);
+        $criteria->compare('discount_2', $this->discount_2, true);
+        $criteria->compare('discount_3', $this->discount_3, true);
+        $criteria->compare('discount_4', $this->discount_4, true);
+        $criteria->compare('discount_5', $this->discount_5, true);
+        $criteria->compare('unit_id', $this->unit_id);
+        $criteria->compare('order_header_id', $this->order_header_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('quantity_delivery', $this->quantity_delivery);
+        $criteria->compare('quantity_remaining', $this->quantity_remaining);
+        $criteria->compare('quantity_purchase', $this->quantity_purchase);
+        $criteria->compare('quantity_invoice', $this->quantity_invoice);
+        $criteria->compare('quantity_receive', $this->quantity_receive);
+        $criteria->compare('quantity_receive_remaining', $this->quantity_receive_remaining);
+        $criteria->compare('unit_price_after_discount', $this->unit_price_after_discount, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+}

@@ -1,0 +1,244 @@
+<div class="form">
+
+    <?php echo CHtml::beginForm(); ?>
+    <?php echo CHtml::errorSummary($invoice->header); ?>
+    <div class="container">
+        <div class="span-12">
+<!--            <div class="row">
+                <?php /*echo CHtml::label('Invoice #', false); ?>
+                <?php echo CHtml::encode(CHtml::value($invoice->header, 'number')); ?>
+                <?php echo CHtml::error($invoice->header, 'number');*/ ?>
+            </div>-->
+
+            <div class="row">
+                <?php echo CHtml::label('Tanggal', false); ?>
+                <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+                    'model' => $invoice->header,
+                    'attribute' => 'date',
+                    // additional javascript options for the date picker plugin
+                    'options' => array(
+                        'dateFormat' => 'yy-mm-dd',
+                    ),
+                    'htmlOptions' => array(
+                        'readonly' => true,
+                    ),
+                )); ?>
+                <?php echo CHtml::error($invoice->header, 'date'); ?>
+            </div>
+            
+            <div class="row">
+                <?php echo CHtml::label('Tanggal PO', false); ?>
+                <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+                    'model' => $invoice->header,
+                    'attribute' => 'customer_order_date',
+                    // additional javascript options for the date picker plugin
+                    'options' => array(
+                        'dateFormat' => 'yy-mm-dd',
+                    ),
+                    'htmlOptions' => array(
+                        'readonly' => true,
+                    ),
+                )); ?>
+                <?php echo CHtml::error($invoice->header, 'customer_order_date'); ?>
+            </div>
+            
+            <div class="row">
+                <?php echo CHtml::label('Catatan', ''); ?>
+                <?php echo CHtml::activeTextArea($invoice->header, 'note', array('cols' => 30, 'rows' => 5)); ?>
+                <?php echo CHtml::error($invoice->header, 'note'); ?>
+            </div>
+        </div>
+        
+        <div class="span-12 last">
+            <div class="row">
+                <?php echo CHtml::label('SO #', false); ?>
+                <?php echo CHtml::encode(CHtml::value($invoice->header, 'orderHeader.number')); ?>
+            </div>
+            
+            <div class="row">
+                <?php echo CHtml::label('SO Date', false); ?>
+                <?php echo CHtml::encode(CHtml::value($invoice->header, 'orderHeader.date')); ?>
+            </div>
+            
+            <div class="row">
+                <?php echo CHtml::label('PO Customer', false); ?>
+                <?php echo CHtml::encode(CHtml::value($invoice->header, 'orderHeader.reference_number')); ?>
+            </div>
+            
+            <div class="row">
+                <?php echo CHtml::label('Customer', false); ?>
+                <?php echo CHtml::encode(CHtml::value($invoice->header, 'orderHeader.customer.name')); ?>
+            </div>
+            
+            <?php if ($invoice->header->is_tax == 0): ?>
+                <div class="row">
+                    <?php echo CHtml::label('Include / Exclude PPN', false); ?>
+                    <?php echo CHtml::encode(CHtml::value($invoice->header, 'orderHeader.taxValue')); ?>
+                </div>
+            
+                <div class="row">
+                    <?php echo CHtml::label('Faktur Pajak #', ''); ?>
+                    <?php echo CHtml::activeTextField($invoice->header, 'tax_number'); ?>
+                    <?php echo CHtml::error($invoice->header, 'tax_number'); ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <hr />
+
+        <div class="row">
+            <?php echo CHtml::button('Tambah Item Stok', array('name' => 'Search', 'onclick' => '$("#delivery-detail-dialog").dialog("open"); return false;', 'onkeypress' => 'if (event.keyCode == 13) { $("#delivery-detail-dialog").dialog("open"); return false; }')); ?>
+            <?php echo CHtml::button('Tambah Item Non-Stok', array('name' => 'Search', 'onclick' => '$("#delivery-new-item-dialog").dialog("open"); return false;', 'onkeypress' => 'if (event.keyCode == 13) { $("#delivery-new-item-dialog").dialog("open"); return false; }')); ?>
+        </div>
+
+        <div id="detail_div" style="width: 920px;">
+            <?php $this->renderPartial('_detail', array(
+                'invoice' => $invoice, 
+//                'deliveryDetail' => $deliveryDetail,
+            )); ?>
+        </div>
+
+        <div id="detail_new_product" style="width: 920px;">
+            <?php $this->renderPartial('_newProduct', array(
+                'invoice' => $invoice, 
+//                'deliveryNewProduct' => $deliveryNewProduct,
+            )); ?>
+        </div>
+
+        <div id="total_div" style="width: 920px;">
+            <?php $this->renderPartial('_total', array(
+                'invoice' => $invoice,
+            )); ?>
+         </div>
+
+        <div class="row buttons">
+            <?php echo CHtml::submitButton('Submit', array('name' => 'Submit', 'confirm' => 'Are you sure you want to save?')); ?>
+            <?php echo CHtml::submitButton('Cancel', array('name' => 'Cancel', 'confirm' => 'Are you sure you want to cancel?')); ?>
+        </div>
+    </div>
+    <?php echo CHtml::endForm(); ?>
+</div>
+
+<div>
+    <?php $this->beginWidget('zii.widgets.jui.CJuiDialog', array(
+        'id' => 'delivery-detail-dialog',
+        // additional javascript options for the dialog plugin
+        'options' => array(
+            'title' => 'Pengiriman Stok',
+            'autoOpen' => false,
+            'width' => 'auto',
+            'modal' => true,
+        ),
+    )); ?>
+
+    <?php echo CHtml::beginForm('', 'post'); ?>
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'delivery-detail-grid',
+        'dataProvider' => $deliveryDetailDataProvider,
+        'filter' => $deliveryDetail,
+        'columns' => array(
+            array(
+                'id' => 'selectedIds',
+                'class' => 'CCheckBoxColumn',
+                'selectableRows' => '50',
+            ),
+            array(
+                'header' => 'Pengiriman #',
+                'value' => '$data->deliveryHeader->number',
+                'htmlOptions' => array('style' => 'width: 200px'),
+            ),
+            array(
+                'header' => 'Tanggal',
+                'name' => 'date',
+                'filter' => false,
+                'value' => 'Yii::app()->dateFormatter->format("d MMM yyyy", $data->deliveryHeader->date)'
+            ),
+            'orderDetail.product_name: Product',
+            'quantity',
+            'orderDetail.unit.name: Satuan',
+        ),
+    )); ?>
+
+    <?php echo CHtml::ajaxSubmitButton('Add Pengiriman Stok', CController::createUrl('ajaxHtmlAddDeliveryDetails', array('id' => $invoice->header->id)), array(
+        'type' => 'POST',
+        'data' => 'js:$("form").serialize()',
+        'success' => 'js:function(html) {
+            $("#detail_div").html(html);
+            $("#delivery-detail-dialog").dialog("close");
+            $.ajax({
+                type: "POST",
+                url: "' . CController::createUrl('ajaxHtmlUpdateTotals', array('id' => $invoice->header->id, 'orderHeaderId' => $invoice->header->order_header_id)) . '",
+                data: $("form").serialize(),
+                success: function(html) {
+                    $("#total_div").html(html);
+                }
+            });
+        }'
+    )); ?>
+
+    <?php echo CHtml::endForm(); ?>
+
+    <?php $this->endWidget('zii.widgets.jui.CJuiDialog'); ?>
+</div>
+
+<div>
+    <?php $this->beginWidget('zii.widgets.jui.CJuiDialog', array(
+        'id' => 'delivery-new-item-dialog',
+        // additional javascript options for the dialog plugin
+        'options' => array(
+            'title' => 'Pengiriman non stok',
+            'autoOpen' => false,
+            'width' => 'auto',
+            'modal' => true,
+        ),
+    )); ?>
+
+    <?php echo CHtml::beginForm('', 'post'); ?>
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'delivery-new-item-grid',
+        'dataProvider' => $deliveryNewProductDataProvider,
+        'filter' => $deliveryNewProduct,
+        'columns' => array(
+            array(
+                'id' => 'selectedNewProductIds',
+                'class' => 'CCheckBoxColumn',
+                'selectableRows' => '50',
+            ),
+            array(
+                'header' => 'Pengiriman #',
+                'value' => '$data->deliveryHeader->number',
+                'htmlOptions' => array('style' => 'width: 200px'),
+            ),
+            array(
+                'header' => 'Tanggal',
+                'name' => 'date',
+                'filter' => false,
+                'value' => 'Yii::app()->dateFormatter->format("d MMM yyyy", $data->deliveryHeader->date)'
+            ),
+            'orderNewProduct.name: Product',
+            'quantity',
+            'orderNewProduct.unit.name: Satuan',
+        ),
+    )); ?>
+
+    <?php echo CHtml::ajaxSubmitButton('Add Pengiriman non stok', CController::createUrl('ajaxHtmlAddDeliveryNewProducts', array('id' => $invoice->header->id)), array(
+        'type' => 'POST',
+        'data' => 'js:$("form").serialize()',
+        'success' => 'js:function(html) {
+            $("#detail_new_product").html(html);
+            $("#delivery-new-item-dialog").dialog("close");
+            $.ajax({
+                type: "POST",
+                url: "' . CController::createUrl('ajaxHtmlUpdateTotals', array('id' => $invoice->header->id)) . '",
+                data: $("form").serialize(),
+                success: function(html) {
+                    $("#total_div").html(html);
+                }
+            });
+        }'
+    )); ?>
+
+    <?php echo CHtml::endForm(); ?>
+
+    <?php $this->endWidget('zii.widgets.jui.CJuiDialog'); ?>
+</div>

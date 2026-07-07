@@ -1,0 +1,180 @@
+<div class="form">
+    <?php echo CHtml::beginForm(); ?>
+    <div class="container">
+        <div class="span-12">
+            <div class="row">
+                <?php echo CHtml::label('Pembayaran #', false); ?>
+                <?php echo CHtml::encode(CHtml::value($salePayment->header, 'number')); ?>
+                <?php echo CHtml::error($salePayment->header, 'number'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Tanggal', false); ?>
+                <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+                    'model' => $salePayment->header,
+                    'attribute' => 'date',
+                    // additional javascript options for the date picker plugin
+                    'options' => array(
+                        'dateFormat' => 'yy-mm-dd',
+                    ),
+                    'htmlOptions' => array(
+                        'readonly' => true,
+                    ),
+                )); ?>
+                <?php echo CHtml::error($salePayment->header, 'date'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Catatan', false); ?>
+                <?php echo CHtml::activeTextArea($salePayment->header, 'note'); ?>
+                <?php echo CHtml::error($salePayment->header, 'note'); ?>
+            </div>
+        </div>
+
+        <div class="span-12 last">
+            <?php if ($salePayment->header->isNewRecord): ?>
+                <div class="row">
+                    <?php echo CHtml::label('Invoice #', false); ?>
+                    <?php echo CHtml::activeTextField($salePayment->header, 'invoice_header_id', array('readonly' => true, 'onclick' => '$("#invoice-dialog").dialog("open"); return false;', 'onkeypress' => 'if (event.keyCode == 13) { $("#invoice-dialog").dialog("open"); return false; }')); ?>
+                    <?php echo CHtml::openTag('span', array('id' => 'invoice_number')); ?>
+                    <?php echo CHtml::encode(CHtml::value($salePayment->header, 'invoiceHeader.number')); ?>
+                    <?php echo CHtml::closeTag('span'); ?>
+                    <?php echo CHtml::error($salePayment->header, 'invoice_header_id'); ?>
+
+                    <?php $this->beginWidget('zii.widgets.jui.CJuiDialog', array(
+                        'id' => 'invoice-dialog',
+                        // additional javascript options for the dialog plugin
+                        'options' => array(
+                            'title' => 'Invoice',
+                            'autoOpen' => false,
+                            'width' => 'auto',
+                            'modal' => true,
+                        ),
+                    )); ?>
+
+                    <?php $this->widget('zii.widgets.grid.CGridView', array(
+                        'id' => 'invoice-grid',
+                        'dataProvider' => $dataProvider,
+                        'filter' => $invoiceHeader,
+                        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+                        'selectionChanged' => 'js:function(id) {
+                            $("#' . CHtml::activeId($salePayment->header, 'invoice_header_id') . '").val($.fn.yiiGridView.getSelection(id));
+                            $("#invoice-dialog").dialog("close");
+                            if ($.fn.yiiGridView.getSelection(id) == "")
+                            {
+                                $("#invoice_number").html("");
+                                $("#invoice_date").html("");
+                                $("#invoice_customer").html("");
+                                $("#grand_total").html("");
+                            } else {
+                                $.ajax({
+                                    type: "POST",
+                                    dataType: "JSON",
+                                    url: "' . CController::createUrl('ajaxJsonInvoice', array('id' => $salePayment->header->id)) . '",
+                                    data: $("form").serialize(),
+                                    success: function(data) {
+                                        $("#invoice_number").html(data.invoice_number);
+                                        $("#invoice_date").html(data.invoice_date);
+                                        $("#invoice_customer").html(data.invoice_customer);
+                                        $("#grand_total").html(data.grand_total);
+                                    },
+                                });
+                            }
+                            $.ajax({
+                                type: "POST",
+                                url: "' . CController::createUrl('ajaxHtmlResetPayment', array('id' => $salePayment->header->id)) . '",
+                                data: $("form").serialize(),
+                                success: function(html) { $("#detail_div").html(html); },
+                            });
+                        }',
+                        'columns' => array(
+                            'number',
+                            array(
+                                'header' => 'Tanggal',
+                                'name' => 'date',
+                                'value' => 'Yii::app()->dateFormatter->format("d MMMM yyyy", $data->date)'
+                            ),
+                            array(
+                                'header' => 'Perusahaan Customer',
+                                'filter' => CHtml::activeDropDownList($invoiceHeader, 'customer_id', CHtml::listData(Customer::model()->findAll(array('order' => 'name ASC')), 'id', 'name'), array('empty' => '')),
+                                'value' => '$data->orderHeader->customer->name',
+                            ),
+                            array(
+                                'header' => 'Total',
+                                'filter' => false,
+                                'value' => 'Yii::app()->numberFormatter->format("#,##0", $data->grand_total)',
+                                'htmlOptions' => array(
+                                    'style' => 'text-align: right',
+                                ),
+                            ),
+                            array(
+                                'header' => 'Payment',
+                                'filter' => false,
+                                'value' => 'Yii::app()->numberFormatter->format("#,##0", $data->total_payment)',
+                                'htmlOptions' => array(
+                                    'style' => 'text-align: right',
+                                ),
+                            ),
+                            array(
+                                'header' => 'Remaining',
+                                'filter' => false,
+                                'value' => 'Yii::app()->numberFormatter->format("#,##0", $data->remaining)',
+                                'htmlOptions' => array(
+                                    'style' => 'text-align: right',
+                                ),
+                            ),
+                        ),
+                    )); ?>
+                    <?php $this->endWidget('zii.widgets.jui.CJuiDialog'); ?>
+                </div>
+            <?php else: ?>
+                <div class="row">
+                    <?php echo CHtml::label('Invoice #', false); ?>
+                    <?php echo CHtml::openTag('span', array('id' => 'invoice_number')); ?>
+                    <?php echo CHtml::encode(CHtml::value($salePayment->header, 'invoiceHeader.number')); ?>
+                    <?php echo CHtml::closeTag('span'); ?>
+                </div>
+            <?php endif; ?>
+
+            <div class="row">
+                <?php echo CHtml::activeLabelEx($salePayment->header, 'Tanggal Penjualan'); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'invoice_date')); ?>
+                <?php if ($salePayment->header->invoice_header_id != NULL) : ?>
+                    <?php echo CHtml::encode(Yii::app()->dateFormatter->format("d MMMM yyyy", CHtml::value($salePayment->header, 'invoiceHeader.date'))); ?>
+                <?php endif; ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Customer', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'invoice_customer')); ?>
+                <?php echo CHtml::encode(CHtml::value($salePayment->header, 'invoiceHeader.customer.company')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+        </div>
+    </div>
+
+    <hr />
+
+    <div class="row buttons">
+        <?php echo CHtml::button('Tambah Data Pelunasan', array(
+            'onclick' => CHtml::ajax(array(
+                'type' => 'POST',
+                'url' => CController::createUrl('ajaxHtmlAddPayment', array('id' => $salePayment->header->id)),
+                'update' => '#detail_div',
+            )),
+        )); ?>
+    </div>
+
+    <div id="detail_div">
+        <?php $this->renderPartial('_detail', array('salePayment' => $salePayment, 'error' => $error)); ?>
+    </div>
+
+    <div class="row buttons">
+        <?php echo CHtml::submitButton('Submit', array('name' => 'Submit', 'confirm' => 'Are you sure you want to save?')); ?>
+        <?php echo CHtml::submitButton('Cancel', array('name' => 'Cancel', 'confirm' => 'Are you sure you want to cancel?')); ?>
+    </div>
+
+    <?php echo CHtml::endForm(); ?>
+
+</div><!-- form -->

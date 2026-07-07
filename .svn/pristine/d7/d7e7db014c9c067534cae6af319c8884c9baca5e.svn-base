@@ -1,0 +1,62 @@
+<?php
+$this->breadcrumbs = array(
+	'Sale Receipt'=>array('create'),
+	'View',
+);
+?>
+
+<h1><?php echo $this->id . '/' . $this->action->id; ?></h1>
+<div id="detail_div">
+	<?php $this->widget('zii.widgets.CDetailView', array(
+		'data'=>$saleReceipt,
+		'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+		'attributes'=>array(
+			array(
+				'label'=>'Tanda Terima Penjualan #',
+				'value'=>$saleReceipt->number,
+			),
+			array(
+				'label'=>'Tanggal',
+				'value'=>Yii::app()->dateFormatter->format("d MMMM yyyy", $saleReceipt->date),
+			),
+			array(
+				'label'=>'Customer',
+				'value'=>$customer->name,
+			),
+			array(
+				'label'=>'Catatan',
+				'value'=>$saleReceipt->note,
+			),
+		),
+	)); ?>
+
+	<?php $this->widget('zii.widgets.grid.CGridView', array(
+		'id'=>'sale-receipt-detail-grid',
+		'dataProvider'=>$detailsDataProvider,
+		'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+		'columns'=>array(
+			'invoice.number: Invoice #',
+			array(
+				'header' => 'Tanggal',
+				'name' => 'date',
+				'value' => 'Yii::app()->dateFormatter->format("d MMMM yyyy", $data->invoice->date)'
+			),
+			'invoice.orderHeader.number: Order #',
+			array(
+				'header'=>'Total',
+				'value'=>'number_format($data->invoice->totalDetail, 2)',
+				'htmlOptions'=>array(
+					'style'=>'text-align: right',
+				),
+			),
+		),
+	)); ?>
+
+	<br />
+
+	<div id="link">
+		<?php echo CHtml::link('Create', array('create')); ?>
+		<?php echo CHtml::link('Update', array('update', 'id'=>$saleReceipt->id)); ?>
+		<?php echo CHtml::link('Print', array('memo', 'id'=>$saleReceipt->id), array('target'=>'_blank')); ?>
+	</div>
+</div>

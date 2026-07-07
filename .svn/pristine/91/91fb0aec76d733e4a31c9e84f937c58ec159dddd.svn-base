@@ -1,0 +1,413 @@
+<?php
+
+class PurchaseReceiptController extends Controller {
+
+    public function filters() {
+        return array(
+            'access',
+        );
+    }
+
+    public function filterAccess($filterChain) {
+        if ($filterChain->action->id === 'create' || $filterChain->action->id === 'update' || $filterChain->action->id === 'ajaxJsonSupplier' || $filterChain->action->id === 'ajaxHtmlAddPurchase' || $filterChain->action->id === 'ajaxHtmlResetDetail' || $filterChain->action->id === 'ajaxHtmlRemoveDetail' || $filterChain->action->id === 'memo' || $filterChain->action->id === 'view') {
+            if (!(Yii::app()->user->checkAccess('purchaseReceiptCreate') || Yii::app()->user->checkAccess('purchaseReceiptEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'delete' || $filterChain->action->id === 'admin') {
+            if (!(Yii::app()->user->checkAccess('purchaseReceiptEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'report') {
+            if (!(Yii::app()->user->checkAccess('purchaseReceiptReport')))
+                $this->redirect(array('/site/login'));
+        }
+
+        $filterChain->run();
+    }
+
+    public function actionCreate() {
+        $purchaseReceipt = $this->instantiate(null);
+        $purchaseReceipt->header->number = CodeNumber::make($purchaseReceipt->header, 'number', 'TTP', Yii::app()->user);
+        $purchaseReceipt->header->admin_id = Yii::app()->user->id;
+        $purchaseReceipt->header->branch_id = Yii::app()->user->branch_id;
+
+        $supplier = Search::bind(new Supplier('search'), isset($_GET['Supplier']) ? $_GET['Supplier'] : array());
+        $supplierDataProvider = $supplier->search();
+
+        $supplierId = isset($_GET['PurchaseReceiptHeader']['supplier_id']) ? $_GET['PurchaseReceiptHeader']['supplier_id'] : '';
+        $purchaseNumber = isset($_GET['PurchaseNumber']) ? $_GET['PurchaseNumber'] : '';
+
+        $receiveHeader = Search::bind(new ReceiveHeader('search'), isset($_GET['ReceiveHeader']) ? $_GET['ReceiveHeader'] : array());
+        $dataProvider = $receiveHeader->searchByPurchaseReceipt();
+        $dataProvider->criteria->with = array(
+            'purchaseHeader' => array(
+                'with' => array(
+                    'supplier',
+                ),
+            ),
+        );
+
+        $dataProvider->criteria->order = 't.id DESC';
+
+        if (!empty($supplierId)) {
+            $dataProvider->criteria->addCondition("purchaseHeader.supplier_id = :supplier_id");
+            $dataProvider->criteria->params[':supplier_id'] = $supplierId;
+        }
+
+        if (!empty($purchaseNumber)) {
+            $dataProvider->criteria->addCondition('purchaseHeader.number LIKE :purchase_header');
+            $dataProvider->criteria->params[':purchase_header'] = "%{$purchaseNumber}%";
+        }
+        
+        $error = false;
+        if (isset($_POST['Submit'])) {
+            $this->loadState($purchaseReceipt);
+            
+            if ($purchaseReceipt->save(Yii::app()->db)) {
+                Yii::app()->session['PurchaseReceiptMemoAllowed'] = true;
+                $this->redirect(array('view', 'id' => $purchaseReceipt->header->id));
+            }
+            else
+                $error = true;
+        }
+
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+
+        $this->render('create', array(
+            'purchaseReceipt' => $purchaseReceipt,
+            'receiveHeader' => $receiveHeader,
+            'dataProvider' => $dataProvider,
+            'supplier' => $supplier,
+            'supplierDataProvider' => $supplierDataProvider,
+            'supplierId' => $supplierId,
+            'purchaseNumber' => $purchaseNumber,
+            'error' => $error,
+        ));
+    }
+
+    public function actionUpdate($id) {
+        $purchaseReceipt = $this->instantiate($id);
+        $purchaseNumber = isset($_GET['PurchaseNumber']) ? $_GET['PurchaseNumber'] : '';
+
+        $supplier = Search::bind(new Supplier('search'), isset($_GET['Supplier']) ? $_GET['Supplier'] : array());
+        $supplierDataProvider = $supplier->search();
+
+        $receiveHeader = Search::bind(new ReceiveHeader('search'), isset($_GET['ReceiveHeader']) ? $_GET['ReceiveHeader'] : array());
+        $dataProvider = $receiveHeader->searchByPurchaseReceipt();
+        $dataProvider->criteria->with = array(
+            'purchaseHeader' => array(
+                'with' => array(
+                    'supplier',
+                ),
+            ),
+        );
+
+        $dataProvider->criteria->order = 't.id DESC';
+
+        $supplierId = $purchaseReceipt->header->supplier_id;
+
+        if (!empty($supplierId)) {
+            $dataProvider->criteria->addCondition("purchaseHeader.supplier_id = :supplier_id");
+            $dataProvider->criteria->params[':supplier_id'] = $supplierId;
+        }
+
+        if (!empty($purchaseNumber)) {
+            $dataProvider->criteria->addCondition('purchaseHeader.number LIKE :purchase_header');
+            $dataProvider->criteria->params[':purchase_header'] = "%{$purchaseNumber}%";
+        }
+        
+        $error = false;
+        
+        if (isset($_POST['Submit'])) {
+            $this->loadState($purchaseReceipt);
+            if ($purchaseReceipt->save(Yii::app()->db))
+                $this->redirect(array('view', 'id' => $purchaseReceipt->header->id));
+            else
+                $error = true;
+        }
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+        $this->render('update', array(
+            'purchaseReceipt' => $purchaseReceipt,
+            'receiveHeader' => $receiveHeader,
+            'dataProvider' => $dataProvider,
+            'supplier' => $supplier,
+            'supplierDataProvider' => $supplierDataProvider,
+            'supplierId' => $supplierId,
+            'purchaseNumber' => $purchaseNumber,
+            'error' => $error,
+        ));
+    }
+
+    public function actionView($id) {
+        $purchaseReceipt = $this->loadModel($id);
+
+        $supplier = $purchaseReceipt->supplier(array('scopes' => 'resetScope'));
+        $branch = $purchaseReceipt->branch(array('scopes' => 'resetScope'));
+
+        $criteria = new CDbCriteria;
+        $criteria->compare('purchase_receipt_header_id', $purchaseReceipt->id);
+        $detailsDataProvider = new CActiveDataProvider('PurchaseReceiptDetail', array(
+            'criteria' => $criteria,
+        ));
+
+        $detailsDataProvider->criteria->with = array(
+            'receiveHeader' => array(
+                'with' => array(
+                    'purchaseHeader' => array(
+                        'with' => array(
+                            'supplier', 
+                            'orderHeader'
+                        ),
+                    ),                    
+                ),
+            ),
+        );
+
+        $this->render('view', array(
+            'purchaseReceipt' => $purchaseReceipt,
+            'supplier' => $supplier,
+            'branch' => $branch,
+            'detailsDataProvider' => $detailsDataProvider,
+        ));
+    }
+
+    public function actionMemo($id) {
+        $this->layout = '//layouts/blank';
+        
+        if (!(Yii::app()->user->checkAccess('administrator'))) {
+            if (!(isset(Yii::app()->session['PurchaseReceiptMemoAllowed']) && Yii::app()->session['PurchaseReceiptMemoAllowed'] === true))
+                $this->redirect(array('admin'));
+        }
+
+        Yii::app()->session->remove('PurchaseReceiptMemoAllowed');
+
+        $purchaseReceipt = $this->loadModel($id);
+
+        $supplier = $purchaseReceipt->supplier(array('scopes' => 'resetScope'));
+        $branch = $purchaseReceipt->branch(array('scopes' => 'resetScope'));
+
+        $purchaseReceiptDetails = $purchaseReceipt->purchaseReceiptDetails(array(
+            'with' => array(
+                'receiveHeader' => array(
+                    'with' => array(
+                        'purchaseHeader'
+                    ),
+                ),
+            ),
+        ));
+
+        $this->render('memo', array(
+            'purchaseReceipt' => $purchaseReceipt,
+            'supplier' => $supplier,
+            'branch' => $branch,
+            'purchaseReceiptDetails' => $purchaseReceiptDetails,
+        ));
+    }
+
+    public function actionAdmin() {
+        $purchaseReceipt = Search::bind(new PurchaseReceiptHeader('search'), isset($_GET['PurchaseReceiptHeader']) ? $_GET['PurchaseReceiptHeader'] : array());
+
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : 10;
+        $purchaseReceiptHeaderDate = (isset($_GET['PurchaseReceiptHeaderDate'])) ? $_GET['PurchaseReceiptHeaderDate'] : '';
+        
+        $dataProvider = $purchaseReceipt->search();
+        $dataProvider->criteria->with = array(
+            'supplier:resetScope',
+            'branch:resetScope',
+        );
+        
+        if (!empty($purchaseReceiptHeaderDate)) {
+            $dataProvider->criteria->addCondition('t.date = :date');
+            $dataProvider->criteria->params[':date'] = $purchaseReceiptHeaderDate;
+        }
+
+        $dataProvider->criteria->order = 't.id DESC';
+        $dataProvider->pagination->pageSize = $pageSize;
+
+        $buttonTemplate = '{view}';
+        if (Yii::app()->user->checkAccess('purchaseReceiptEdit'))
+            $buttonTemplate .= '{update}';
+        if (Yii::app()->user->checkAccess('administrator'))
+            $buttonTemplate .= '{delete}';
+
+        $this->render('admin', array(
+            'purchaseReceipt' => $purchaseReceipt,
+            'dataProvider' => $dataProvider,
+            'buttonTemplate' => $buttonTemplate,
+        ));
+    }
+
+    public function actionBlankTaxNumber() {
+        $purchaseReceiptDetail = Search::bind(new PurchaseReceiptDetail('search'), isset($_GET['PurchaseReceiptDetail']) ? $_GET['PurchaseReceiptDetail'] : array());
+
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : 10;
+        $purchaseReceiptHeaderDate = (isset($_GET['PurchaseReceiptHeaderDate'])) ? $_GET['PurchaseReceiptHeaderDate'] : '';
+        
+        $dataProvider = $purchaseReceiptDetail->search();
+        $dataProvider->criteria->with = array(
+            'purchaseReceiptHeader' => array(
+                'with' => array(
+                    'supplier:resetScope',
+                    'branch:resetScope',
+                ),
+            ),
+            'receiveHeader' => array(
+                'with' => array(
+                    'purchaseHeader'
+                ),
+            ),
+        );
+        
+        if (!empty($purchaseReceiptHeaderDate)) {
+            $dataProvider->criteria->addCondition('t.date = :date');
+            $dataProvider->criteria->params[':date'] = $purchaseReceiptHeaderDate;
+        }
+
+        $dataProvider->criteria->order = 't.id DESC';
+        $dataProvider->criteria->addCondition('(t.tax_number = "" OR t.tax_number IS NULL) AND purchaseHeader.is_tax = 0');
+        $dataProvider->pagination->pageSize = $pageSize;
+        
+        $buttonTemplate = '{view}';
+        if (Yii::app()->user->checkAccess('invoiceEdit')) {
+            $buttonTemplate .= '{update}';
+        }
+
+        $this->render('blankTaxNumber', array(
+            'purchaseReceiptDetail' => $purchaseReceiptDetail,
+            'dataProvider' => $dataProvider,
+            'buttonTemplate' => $buttonTemplate,
+        ));
+    }
+
+    public function actionDelete($id) {
+        if (Yii::app()->request->isPostRequest) {
+            $purchaseReceiptHeader = $this->loadModel($id);
+            
+            if ($purchaseReceiptHeader !== null) {
+                $purchaseReceiptHeader->is_inactive = !$purchaseReceiptHeader->is_inactive;
+                $purchaseReceiptHeader->update(array('is_inactive'));
+                
+                if (count($purchaseReceiptHeader->purchaseReceiptDetails) > 0) {
+                    foreach ($purchaseReceiptHeader->purchaseReceiptDetails as $detail) {
+                        $detail->is_inactive = ActiveRecord::INACTIVE;
+                        $detail->update(array('is_inactive'));
+                    }
+                }
+            }
+
+            if (!isset($_GET['ajax']))
+                $this->redirect(isset($_POST['returnUrl']) ? $_POST['returnUrl'] : array('admin'));
+        }
+        else
+            throw new CHttpException(400, 'Invalid request. Please do not repeat this request again.');
+    }
+
+    public function actionAjaxJsonSupplier($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $supplierId = (isset($_POST['PurchaseReceiptHeader']['supplier_id'])) ? $_POST['PurchaseReceiptHeader']['supplier_id'] : '';
+
+            $supplier = Supplier::model()->findByPk($supplierId);
+
+            $object = array(
+                'supplier_id' => CHtml::value($supplier, 'id'),
+                'supplier_name' => CHtml::value($supplier, 'name'),
+                'supplier_company' => CHtml::value($supplier, 'company'),
+                'supplier_address' => CHtml::value($supplier, 'address'),
+                'supplier_city' => CHtml::value($supplier, 'city'),
+            );
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxHtmlAddReceive($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $purchaseReceipt = $this->instantiate($id);
+            $this->loadState($purchaseReceipt);
+
+            if (isset($_POST['ReceiveId']))
+                $purchaseReceipt->addDetail($_POST['ReceiveId']);
+
+            $this->renderPartial('_detail', array(
+                'purchaseReceipt' => $purchaseReceipt,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlResetDetail($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $purchaseReceipt = $this->instantiate($id);
+
+            $this->loadState($purchaseReceipt);
+
+            if (isset($_POST['PurchaseReceiptHeader']['supplier_id']))
+                $purchaseReceipt->resetDetail();
+
+            $this->renderPartial('_detail', array(
+                'purchaseReceipt' => $purchaseReceipt,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlRemoveDetail($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $purchaseReceipt = $this->instantiate($id);
+
+            $this->loadState($purchaseReceipt);
+
+            $purchaseReceipt->removeDetailAt($index);
+
+            $this->renderPartial('_detail', array(
+                'purchaseReceipt' => $purchaseReceipt,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function instantiate($id) {
+        if (empty($id))
+            $purchaseReceipt = new PurchaseReceipt(new PurchaseReceiptHeader(), array());
+        else {
+            $purchaseReceiptHeader = $this->loadModel($id);
+            $purchaseReceipt = new PurchaseReceipt($purchaseReceiptHeader, $purchaseReceiptHeader->purchaseReceiptDetails);
+        }
+
+        return $purchaseReceipt;
+    }
+
+    public function loadModel($id) {
+        $model = PurchaseReceiptHeader::model()->findByPk($id);
+        if ($model === null)
+            throw new CHttpException(404, 'The requested page does not exist.');
+        return $model;
+    }
+
+    public function loadState($purchaseReceipt) {
+        if (isset($_POST['PurchaseReceiptHeader'])) {
+            $purchaseReceipt->header->attributes = $_POST['PurchaseReceiptHeader'];
+        }
+        if (isset($_POST['PurchaseReceiptDetail'])) {
+            foreach ($_POST['PurchaseReceiptDetail'] as $i => $item) {
+                if (isset($purchaseReceipt->details[$i]))
+                    $purchaseReceipt->details[$i]->attributes = $item;
+                else {
+                    $detail = new PurchaseReceiptDetail();
+                    $detail->attributes = $item;
+                    $purchaseReceipt->details[] = $detail;
+                }
+            }
+            if (count($_POST['PurchaseReceiptDetail']) < count($purchaseReceipt->details))
+                array_splice($purchaseReceipt->details, $i + 1);
+        }
+        else
+            $purchaseReceipt->details = array();
+    }
+
+}
+
+?>

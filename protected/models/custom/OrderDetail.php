@@ -1,0 +1,81 @@
+<?php
+
+class OrderDetail extends OrderDetailBase {
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getDiscountValue() {
+        return ((((((1 + ($this->discount_1 / 100))) * (1 + ($this->discount_2 / 100))) * (1 + ($this->discount_3 / 100))) * (1 + ($this->discount_4 / 100))) * (1 + ($this->discount_5 / 100)));
+    }
+
+    public function getPriceAfterDiscount() {
+        return $this->unit_price_single * $this->discountValue;
+    }
+    
+    public function getTotal() {
+        return $this->quantity_single * $this->unit_price_single * $this->discountValue;
+    }
+
+    public function getCurrentStock() {
+        $sql = SqlGenerator::globalStock();
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->product_id,
+            ':unit_id_single' => $this->product->unit_id_single,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getTotalQuantityDelivery() {
+        $total = 0;
+
+        foreach ($this->deliveryDetails as $detail) {
+            if ($detail->is_inactive == 0) {
+                $total += $detail->quantity;
+            }
+        }
+
+        return $total;
+    }
+
+    public function getTotalQuantityPurchase() {
+        $total = 0;
+
+        foreach ($this->purchaseDetails as $detail) {
+            if ($detail->is_inactive == 0) {
+                $total += $detail->quantity;
+            }
+        }
+
+        return $total;
+    }
+    
+    public function getRemainingQuantityPacking() {
+        $total = 0;
+        
+        foreach ($this->packingListDetails as $detail) {
+            if ($detail->is_inactive == 0) {
+                $total += $detail->quantity;
+            }
+        }
+        
+        return $this->quantity_single - $total;
+    }
+    
+    public function getTotalQuantityInvoice() {
+        $total = 0;
+
+        foreach ($this->deliveryDetails as $delivery) {
+            foreach ($delivery->invoiceDetails as $detail) {
+                if ($detail->is_inactive == 0) {
+                    $total += $detail->quantity;
+                }
+            }
+        }
+
+        return $total;
+    }
+}

@@ -1,0 +1,46 @@
+<?php
+
+class InvoiceOutstandingController extends Controller {
+
+    public function filters() {
+        return array(
+            'access',
+        );
+    }
+
+    public function filterAccess($filterChain) {
+        if ($filterChain->action->id === 'report') {
+            if (!(Yii::app()->user->checkAccess('invoiceReport')))
+                $this->redirect(array('/site/login'));
+        }
+
+        $filterChain->run();
+    }
+
+    public function actionReport() {
+        $invoiceHeader = new InvoiceHeader();
+//        $invoice = Search::bind(new InvoiceHeader('search'), isset($_GET['InvoiceHeader']) ? $_GET['InvoiceHeader'] : array());
+
+        $customerId = (isset($_GET['CustomerId'])) ? $_GET['CustomerId'] : '';
+        $branchId = (isset($_GET['BranchId'])) ? $_GET['BranchId'] : '';
+        $endDate = (isset($_GET['EndDate'])) ? $_GET['EndDate'] : '';
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : '';
+        $currentPage = (isset($_GET['page'])) ? $_GET['page'] : '';
+        $currentSort = (isset($_GET['sort'])) ? $_GET['sort'] : '';
+
+        $invoices = $invoiceHeader->searchByReportOutstanding($endDate, $customerId, $branchId);
+//        $invoiceReport = new InvoiceOutstandingReport($invoice->search());
+//        $invoiceReport->setupLoading();
+//        $invoiceReport->setupPaging($pageSize, $currentPage);
+//        $invoiceReport->setupSorting();
+//        $invoiceReport->setupFilter($startDate, $endDate);
+
+        $this->render('report', array(
+            'invoices' => $invoices,
+            'invoiceHeader' => $invoiceHeader,
+            'customerId' => $customerId,
+            'endDate' => $endDate,
+            'branchId' => $branchId,
+        ));
+    }
+}

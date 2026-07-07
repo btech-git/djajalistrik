@@ -1,0 +1,96 @@
+<?php
+CHtml::refresh(300);
+
+Yii::app()->clientScript->registerScript('admin', "
+    $('form').submit(function(){
+        $.fn.yiiGridView.update('order-grid', {
+            data: $(this).serialize()
+        });
+        return false;
+    });
+");
+?>
+
+<h1>List Sales Order</h1>
+<div id="detail_div">
+   
+    <div id="link">
+        <?php echo CHtml::link('Manage', array('admin')); ?>
+    </div>
+
+    <br />
+
+    <?php echo CHtml::beginForm(); ?>
+    <div>
+        Page Size:
+        <?php echo CHtml::dropDownList('PageSize', '', array(10 => '10', 25 => '25', 50 => '50', 100 => '100'), array(
+            'onchange' => '$("form").submit();',
+        )); ?>
+
+        Filter by Date: 
+        <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+            'name' => 'OrderHeaderDate',
+            // additional javascript options for the date picker plugin
+            'options' => array(
+                'dateFormat' => 'yy-mm-dd',
+                'onSelect' => 'js:function(dateText, inst) {
+                    $("form").submit();
+                }',
+            ),
+            'htmlOptions' => array(
+                'readonly' => true,
+            ),
+        )); ?>
+
+        <?php echo CHtml::button('Semua Tanggal', array('onclick' => '$("#OrderHeaderDate").val(""); $("form").submit();')); ?>
+    </div>
+    <?php echo CHtml::endForm(); ?>
+
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'order-grid',
+        'dataProvider' => $orderHeaderDataProvider,
+        'filter' => $orderHeader,
+        'pager' => array('cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css'),
+        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+        'columns' => array(
+            array(
+                'name' => 'number',
+                'header' => 'SO #',
+                'value' => '$data->number',
+                'htmlOptions' => array('style' => 'width: 300px'),
+            ),
+            array(
+                'header' => 'Tanggal',
+                'name' => 'date',
+                'filter' => false, 
+                'value' => 'Yii::app()->dateFormatter->format("d MMM yyyy", $data->date)',
+            ),
+            array(
+                'header' => 'PO Customer',
+                'name' => 'reference_number',
+                'value' => 'CHtml::value($data, "reference_number")',
+            ),
+            array(
+                'header' => 'Customer',
+                'filter' => CHtml::textField('CustomerCompany', $customerCompany, array('size' => '30', 'maxLength' => '60')),
+                'value' => 'CHtml::value($data, "customer.company")',
+            ),
+            array(
+                'header' => 'PPN/Non',
+                'filter' => CHtml::activeDropDownList($orderHeader, 'is_tax', array(
+                    OrderHeader::TAX => OrderHeader::TAX_LITERAL, 
+                    OrderHeader::NONTAX => OrderHeader::NONTAX_LITERAL
+                ), array('empty' => '-- All --')),
+                'value' => 'CHtml::value($data, "taxStatus")',
+            ),
+            array(
+                'header' => '',
+                'type' => 'raw',
+                'value' => 'CHtml::link("Create", array("create", "orderHeaderId"=>$data->id))',
+                'htmlOptions' => array(
+                    'style' => 'text-align: center;'
+                ),
+            ),
+        ),
+    )); ?>
+</div>

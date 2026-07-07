@@ -1,0 +1,315 @@
+<?php
+
+class Order extends CComponent {
+
+    public $header;
+    public $details;
+    public $newProducts;
+
+    public function __construct($header, array $details, array $newProducts) {
+        $this->header = $header;
+        $this->details = $details;
+        $this->newProducts = $newProducts;
+    }
+
+    public function addDetail($id) {
+        $product = Product::model()->findByPk($id);
+
+        if ($product !== null) {
+            $exist = false;
+            
+            $detail = new OrderDetail();
+            $detail->product_id = $product->id;
+            $detail->product_name = $product->name;
+            $detail->unit_price_single = $product->selling_price;
+            $detail->unit_id = $product->unit_id_single;
+            $this->details[] = $detail;
+
+            $keys = array_keys($this->details);
+            $this->updateDiscountAt(end($keys));
+        }
+    }
+
+    public function updateDiscount() {
+        foreach ($this->details as $i => $detail) {
+            $this->updateDiscountAt($i);
+        }
+    }
+
+    public function updateTax() {
+        if ($this->header->customer !== null && (int) $this->header->customer->is_non_tax == 0) {
+            $this->header->is_tax = OrderHeader::TAX;
+        } else {
+            $this->header->is_tax = OrderHeader::NONTAX;
+        }
+    }
+
+    public function updateDiscountAt($index) {
+        if (empty($this->header->customer->discount_category_id)) {
+            $this->details[$index]->discount_1 = 0;
+            $this->details[$index]->discount_2 = 0;
+            $this->details[$index]->discount_3 = 0;
+            $this->details[$index]->discount_4 = 0;
+            $this->details[$index]->discount_5 = 0;
+        } else {
+            if ($this->details[$index]->unit_id === $this->details[$index]->product->unit_id_single) {
+                $productCategoryId = $this->details[$index]->product->product_category_id_single;
+            } else if ($this->details[$index]->unit_id === $this->details[$index]->product->unit_id_bulk) {
+                $productCategoryId = $this->details[$index]->product->product_category_id_bulk;
+            } else {
+                $productCategoryId = null;
+            }
+
+            $productDiscountCategory = ProductDiscountCategory::model()->findByAttributes(array('product_category_id' => $productCategoryId, 'discount_category_id' => $this->header->customer->discount_category_id));
+
+            if ($productDiscountCategory !== null) {
+                $this->details[$index]->discount_1 = $productDiscountCategory->value_1;
+                $this->details[$index]->discount_2 = $productDiscountCategory->value_2;
+                $this->details[$index]->discount_3 = $productDiscountCategory->value_3;
+                $this->details[$index]->discount_4 = $productDiscountCategory->value_4;
+                $this->details[$index]->discount_5 = $productDiscountCategory->value_5;
+            }
+        }
+    }
+
+    public function removeDetailAt($index) {
+        array_splice($this->details, $index, 1);
+    }
+
+    public function removeNewProductAt($index) {
+        array_splice($this->newProducts, $index, 1);
+    }
+
+    public function save($dbConnection) {
+        $dbTransaction = $dbConnection->beginTransaction();
+        try {
+            $valid = $this->validate() && $this->flush();
+            if ($valid)
+                $dbTransaction->commit();
+            else
+                $dbTransaction->rollback();
+        } catch (Exception $e) {
+            $dbTransaction->rollback();
+            $valid = false;
+            $this->header->addError('error', $e->getMessage());
+        }
+
+        return $valid;
+    }
+
+    public function validate() {
+        $valid = $this->header->validate();
+
+        if ($this->header->isNewRecord) {
+            $valid = $this->validateCustomerOrderNumber() && $valid;
+        }
+        $valid = $this->validateDetailsCount() && $valid;
+        $valid = $this->validateCreditLimit() && $valid;
+
+        if ($valid) {
+            if (count($this->details) > 0) {
+                foreach ($this->details as $i => $detail) {
+                    $fields = array('quantity_single', 'product_id');
+                    $valid = $detail->validate($fields) && $valid;
+                    if (!$valid) {
+                        foreach ($detail->getErrors() as $errorMessages) {
+                            foreach ($errorMessages as $errorMessage) {
+                                $this->header->addError('error', 'Detail Row ' . $i . ': ' . $errorMessage);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($valid) {
+            if (count($this->newProducts) > 0) {
+                foreach ($this->newProducts as $i => $detail) {
+                    $fields = array('quantity', 'unit_price', 'unit_id');
+                    $valid = $detail->validate($fields) && $valid;
+                    if (!$valid) {
+                        foreach ($detail->getErrors() as $errorMessages) {
+                            foreach ($errorMessages as $errorMessage) {
+                                $this->header->addError('error', 'Detail Row ' . $i . ': ' . $errorMessage);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (count($this->details) > 0 && !$this->header->isNewRecord) {
+            $valid = $this->validateDetailsInactive() && $valid;
+        }
+        
+        if (count($this->newProducts) > 0 && !$this->header->isNewRecord) {
+            $valid = $this->validateNewProductsInactive() && $valid;
+        }
+        
+        return $valid;
+    }
+
+    public function validateCustomerOrderNumber() {
+        $valid = true;
+
+        if (!empty($this->header->customer_id)) {
+            $orderHeader = OrderHeader::model()->findByAttributes(array('customer_id' => $this->header->customer_id, 'reference_number' => $this->header->reference_number));
+            if (!empty($orderHeader)) {
+                $valid = false;
+                $this->header->addError('error', 'Order Customer sudah ada!!!');
+            }
+        } else {
+            $valid = false;
+        }
+
+        return $valid;
+    }
+
+    public function validateDetailsCount() {
+        $valid = true;
+        if (count($this->details) === 0 && count($this->newProducts) === 0) {
+            $valid = false;
+            $this->header->addError('error', 'Form tidak ada data untuk insert database. Minimal satu data detail untuk melakukan penyimpanan.');
+        }
+
+        return $valid;
+    }
+
+    public function validateCreditLimit() {
+        $valid = true;
+
+        if ($this->header->customer !== null) {
+            if ($this->header->customer->remainingCreditLimit < $this->grandTotal) {
+                $valid = false;
+                $this->header->addError('error', 'Grand Total lebih besar dari Credit Limit');
+            }
+        } else {
+            $valid = false;
+        }
+
+        return $valid;
+    }
+
+    public function validateDetailsInactive() {
+        $valid = true;
+
+        foreach ($this->details as $detail) {
+            $purchaseDetail = PurchaseDetail::model()->findByAttributes(array('order_detail_id' => $detail->id, 'is_inactive' => ActiveRecord::ACTIVE));
+            if (!empty($purchaseDetail) && $detail->is_inactive == ActiveRecord::INACTIVE) {
+                $valid = false;
+                $this->header->addError('error', 'Detail tidak dapat di inactive');
+                break;
+            }
+        }
+
+        return $valid;
+    }
+
+    public function validateNewProductsInactive() {
+        $valid = true;
+
+        foreach ($this->newProducts as $detail) {
+            $purchaseNewProduct = PurchaseNewProduct::model()->findByAttributes(array('order_new_product_id' => $detail->id, 'is_inactive' => ActiveRecord::ACTIVE));
+            if (!empty($purchaseNewProduct) && $detail->is_inactive == ActiveRecord::INACTIVE) {
+                $valid = false;
+                $this->header->addError('error', 'Detail tidak dapat di inactive');
+                break;
+            }
+        }
+
+        return $valid;
+    }
+
+    public function flush() {
+        $this->header->tax = ((int) $this->header->is_tax === OrderHeader::TAX) ? $this->header->tax : 0;
+        $valid = $this->header->save(false);
+
+        foreach ($this->details as $detail) {
+            if ($detail->quantity_single <= 0)
+                continue;
+
+            if ($detail->isNewRecord) {
+                $detail->order_header_id = $this->header->id;
+                $detail->quantity_remaining = $detail->quantity_single;
+            } else {
+                $purchaseDetails = PurchaseDetail::model()->findAllByAttributes(array('order_detail_id' => $detail->id));
+                
+                if (!empty($purchaseDetails)) {
+                    foreach($purchaseDetails as $purchaseDetail) {
+                        $purchaseDetail->unit_price_sale_order = $detail->priceAfterDiscount;
+                        $purchaseDetail->update(array('unit_price_sale_order'));
+                    }
+                }
+            }
+
+            $detail->unit_price_after_discount = $detail->priceAfterDiscount;
+            
+            $valid = $detail->save(false) && $valid;
+        }
+        
+        foreach ($this->newProducts as $detail) {
+            if ($detail->quantity <= 0)
+                continue;
+
+            if ($detail->isNewRecord) {
+                $detail->order_header_id = $this->header->id;
+                $detail->quantity_remaining = $detail->quantity;
+            } else {
+                $purchaseNewProducts = PurchaseNewProduct::model()->findAllByAttributes(array('order_new_product_id' => $detail->id));
+                
+                if (!empty($purchaseNewProducts)) {
+                    foreach($purchaseNewProducts as $purchaseNewProduct) {
+                        $purchaseNewProduct->unit_price_sale_order = $detail->priceAfterDiscount;
+                        $purchaseNewProduct->update(array('unit_price_sale_order'));
+                    }
+                }
+            }
+
+            $detail->unit_price_after_discount = $detail->priceAfterDiscount;
+            
+            $valid = $detail->save(false) && $valid;
+        }
+
+        return $valid;
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->details as $detail) {
+            $total += $detail->total;
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->newProducts as $newProduct) {
+            $total += $newProduct->total;
+        }
+
+        return $total;
+    }
+
+    public function getSubTotal() {
+        $subTotal = $this->totalDetail + $this->totalNewProduct;
+
+        if ((int) $this->header->is_tax === OrderHeader::TAX && (int) $this->header->is_include === OrderHeader::INCLUDE_TAX) {
+            $subTotal = $subTotal / (1 + ($this->header->tax / 100));
+        }
+
+        return $subTotal;
+    }
+
+    public function getTotalTax() {
+
+        return ((int) $this->header->is_tax === OrderHeader::TAX) ? $this->subTotal * ($this->header->tax / 100) : 0;
+    }
+
+    public function getGrandTotal() {
+
+        return $this->subTotal + $this->totalTax - $this->header->deposit + $this->header->shipping_fee;
+    }
+}

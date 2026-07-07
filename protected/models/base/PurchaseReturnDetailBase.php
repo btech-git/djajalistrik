@@ -1,0 +1,69 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property integer $quantity
+ * @property integer $purchase_return_header_id
+ * @property integer $product_id
+ * @property integer $unit_id
+ * @property integer $is_inactive
+ * @property integer $receive_detail_id
+ *
+ * @property ReceiveDetail $receiveDetail
+ * @property PurchaseReturnHeader $purchaseReturnHeader
+ * @property Product $product
+ * @property Unit $unit
+ */
+class PurchaseReturnDetailBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_purchase_return_detail';
+    }
+
+    public function rules() {
+        return array(
+            array('purchase_return_header_id, product_id, unit_id, receive_detail_id', 'required'),
+            array('quantity, purchase_return_header_id, product_id, unit_id, is_inactive, receive_detail_id', 'numerical', 'integerOnly' => true),
+            // The following rule is used by search().
+            array('id, quantity, purchase_return_header_id, product_id, unit_id, is_inactive, receive_detail_id', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'receiveDetail' => array(self::BELONGS_TO, 'ReceiveDetail', 'receive_detail_id'),
+            'purchaseReturnHeader' => array(self::BELONGS_TO, 'PurchaseReturnHeader', 'purchase_return_header_id'),
+            'product' => array(self::BELONGS_TO, 'Product', 'product_id'),
+            'unit' => array(self::BELONGS_TO, 'Unit', 'unit_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'quantity' => 'Quantity',
+            'purchase_return_header_id' => 'Purchase Return Header',
+            'product_id' => 'Product',
+            'unit_id' => 'Unit',
+            'is_inactive' => 'Is Inactive',
+            'receive_detail_id' => 'Receive Detail',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('quantity', $this->quantity);
+        $criteria->compare('purchase_return_header_id', $this->purchase_return_header_id);
+        $criteria->compare('product_id', $this->product_id);
+        $criteria->compare('unit_id', $this->unit_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('receive_detail_id', $this->receive_detail_id);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+}

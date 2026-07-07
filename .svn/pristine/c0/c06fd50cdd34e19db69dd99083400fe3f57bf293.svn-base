@@ -1,0 +1,231 @@
+<?php
+
+class InvoiceHeader extends InvoiceHeaderBase {
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->invoiceDetails as $detail) {
+            $amount = (int) $detail->is_inactive == 0 ? $detail->total : 0.00;
+            $total += $amount;
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->invoiceNewProducts as $newProduct) {
+            $amount = (int) $newProduct->is_inactive == 0 ? $newProduct->total : 0.00;
+            $total += $amount;
+        }
+
+        return $total;
+    }
+
+    public function getSubTotal() {
+        $subTotal = $this->totalDetail + $this->totalNewProduct;
+
+        if ((int) $this->is_tax === OrderHeader::TAX && (int) $this->is_include === OrderHeader::INCLUDE_TAX) {
+            $subTotal = $subTotal / (1 + ($this->tax_percentage / 100));
+        }
+
+        return $subTotal;
+    }
+
+    public function getCoretaxAmount() {
+
+        return $this->subTotal * 11/12;
+    }
+
+    public function getTotalTax() {
+
+        return ((int) $this->is_tax === OrderHeader::TAX) ? $this->subTotal * $this->tax_percentage / 100 : 0;
+    }
+
+    public function getGrandTotal() {
+
+        return $this->subTotal + $this->totalTax;
+    }
+
+    public function getRemaining() {
+        return $this->grand_total - $this->total_payment;
+    }
+
+    public function getTotalPayment() {
+        $total = 0.00;
+
+        foreach ($this->salePaymentHeaders as $header) {
+            if ($header->is_inactive == 0) {
+                $total += $header->totalDetail;
+            }
+        }
+
+        return $total;
+    }
+
+    public function searchBySalePayment() {
+        $criteria = new CDbCriteria;
+
+        $criteria->order = 't.id DESC';
+        $criteria->condition = "grand_total - total_payment > 100";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.is_inactive', 0);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 100, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByCustomerReceivable() {
+        $criteria = new CDbCriteria;
+
+        $criteria->order = 't.id DESC';
+        $criteria->condition = "grand_total - total_payment > 100";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.is_inactive', 0);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 10, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByOutstanding() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.grand_total - COALESCE(t.total_payment, 0) > 100 AND t.is_inactive = 0";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 500, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByApproval() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.is_approved = 0 AND t.is_tax = 0 AND t.tax_percentage > 0 AND t.tax_number IS NULL AND t.is_inactive = 0";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 100, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByReportOutstanding() {
+        
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.is_approved = 1 AND t.is_inactive = 0 AND t.grand_total - COALESCE(t.total_payment, 0) > 100";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 500, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+    
+    public function searchBySaleReceipt() {
+        $criteria = new CDbCriteria;
+
+        $criteria->order = 't.id DESC';
+        $criteria->condition = "NOT EXISTS (
+            SELECT h.invoice_header_id
+            FROM " . SaleReceiptDetail::model()->tableName() . " h 
+            WHERE t.id = h.invoice_header_id AND h.is_inactive = 0
+        ) AND t.is_inactive = 0 AND t.date > '2024-12-31'";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 500, //Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+}

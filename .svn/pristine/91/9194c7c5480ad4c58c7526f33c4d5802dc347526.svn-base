@@ -1,0 +1,71 @@
+<?php
+$this->breadcrumbs = array(
+	'Sale Payment'=>array('create'),
+	'View',
+);
+?>
+
+<h1><?php echo $this->id . '/' . $this->action->id; ?></h1>
+<div id="detail_div">
+	<?php $this->widget('zii.widgets.CDetailView', array(
+		'data'=>$salePayment,
+		'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+		'attributes'=>array(
+			array(
+				'label'=>'Pelunasan #',
+				'value'=>$salePayment->number,
+			),
+			array(
+				'label'=>'Tanggal',
+				'value'=>Yii::app()->dateFormatter->format("d MMMM yyyy", $salePayment->date),
+			),
+			array(
+				'label'=>'Faktur #',
+				'value'=>$invoice->number,
+			),
+			array(
+				'label'=>'Catatan',
+				'value'=>$salePayment->note,
+			),
+		),
+	)); ?>
+
+	<?php $this->widget('zii.widgets.grid.CGridView', array(
+		'id'=>'sale-payment-detail-grid',
+		'dataProvider'=>$detailsDataProvider,
+		'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+		'columns'=>array(
+			'paymentType.name: Jenis Pembayaran',
+			'memo',
+			array(
+				'header'=>'Jumlah',
+				'value'=>'number_format($data->amount, 2)',
+				'htmlOptions'=>array(
+						'style'=>'text-align: right',
+				),
+			),
+		),
+	)); ?>
+
+	<br />
+
+    <table>
+        <tr>
+            <td style="width: 80%; font-weight: bold; text-align: right">Total Invoice</td>
+            <td style="font-weight: bold; text-align: right"><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'invoiceHeader.grand_total'))); ?></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; text-align: right">Total Payment</td>
+            <td style="font-weight: bold; text-align: right"><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'invoiceHeader.total_payment'))); ?></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; text-align: right">Sisa</td>
+            <td style="font-weight: bold; text-align: right"><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'invoiceHeader.remaining'))); ?></td>
+        </tr>
+    </table>
+	<div id="link">
+		<?php echo CHtml::link('Create', array('create')); ?>
+		<?php echo CHtml::link('Update', array('update', 'id'=>$salePayment->id)); ?>
+		<?php echo CHtml::link('Print', array('memo', 'id'=>$salePayment->id), array('target'=>'_blank')); ?>
+	</div>
+</div>

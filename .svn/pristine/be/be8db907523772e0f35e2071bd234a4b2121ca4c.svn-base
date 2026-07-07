@@ -1,0 +1,147 @@
+<?php
+
+class DeliveryHeader extends DeliveryHeaderBase {
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getTotalQuantityDetail() {
+        $total = 0.00;
+
+        foreach ($this->deliveryDetails as $detail) {
+            $total += $detail->quantity;
+        }
+
+        return $total;
+    }
+
+    public function getTotalQuantityNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->deliveryNewProducts as $detail) {
+            $total += $detail->quantity;
+        }
+
+        return $total;
+    }
+
+    public function getTotalQuantity() {
+
+        return $this->totalQuantityDetail + $this->totalQuantityNewProduct;
+    }
+
+    public function getSubTotal() {
+        $total = 0.00;
+
+        foreach ($this->deliveryDetails as $detail) {
+            $total += $detail->total;
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->deliveryNewProducts as $detail) {
+            $total += $detail->total;
+        }
+
+        return $total;
+    }
+
+    public function getSubTotalAll() {
+        $orderHeader = $this->orderHeader;
+        $subTotal = 0.00;
+
+        if (!empty($orderHeader)) {
+            if ((int) $orderHeader->is_tax == 0 && (int) $orderHeader->is_include == 0) {
+                $subTotal = ($this->getSubTotal() + $this->getTotalNewProduct()) / 1.1;
+            } else {
+                $subTotal = $this->getSubTotal() + $this->getTotalNewProduct();
+            }
+        }
+
+        return $subTotal;
+    }
+
+    public function getTotalTax() {
+        $orderHeader = $this->orderHeader;
+
+        return ((int) $orderHeader->is_tax == 1) ? 0 : $this->subTotalAll * .1;
+    }
+
+    public function getGrandTotal() {
+        if ($this->order_header_id != NULL) {
+            return $this->subTotalAll + $this->totalTax + $this->orderHeader->shipping_fee - $this->orderHeader->deposit;
+        } else {
+            return $this->subTotalAll;
+        }
+    }
+
+    public function searchByInvoice() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "
+            t.id NOT IN (
+                SELECT delivery_header_id 
+                FROM " . Invoice::model()->tableName() . " 
+                WHERE is_inactive = 0
+            ) AND t.is_inactive = 0
+        ";
+
+        $criteria->compare('number', $this->number, true);
+        $criteria->compare('date', $this->date, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchBySaleReturn() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "EXISTS (
+            SELECT s.quantity - SUM(COALESCE(d.quantity, 0)) AS remaining
+            FROM " . DeliveryDetail::model()->tableName() . " s
+            LEFT OUTER JOIN " . SaleReturnDetail::model()->tableName() . " d ON s.id = d.delivery_detail_id
+            WHERE t.id = s.delivery_header_id AND s.is_inactive = 0
+            GROUP BY s.id
+            HAVING remaining > 0
+        ) AND t.is_inactive = 0";
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('number', $this->number, true);
+        $criteria->compare('date', $this->date, true);
+        $criteria->compare('note', $this->note, true);
+        $criteria->compare('order_header_id', $this->order_header_id);
+        $criteria->compare('warehouse_id', $this->warehouse_id);
+        $criteria->compare('branch_id', $this->branch_id);
+        $criteria->compare('admin_id', $this->admin_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('packing_list_header_id', $this->packing_list_header_id);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+        ));
+    }
+    
+    public static function getMonthlyUserDeliveryReport($year, $month) {
+        $params = array(
+            ':year' => $year,
+            ':month' => $month,
+        );
+        
+        $sql = "SELECT i.admin_id, MAX(a.name) AS employee_name, COUNT(i.id) AS delivery_quantity
+                FROM " . DeliveryHeader::model()->tableName() . " i
+                INNER JOIN " . Admin::model()->tableName() . " a ON a.id = i.admin_id
+                WHERE YEAR(i.date) = :year AND MONTH(i.date) = :month AND i.admin_id IS NOT NULL AND i.is_inactive = 0
+                GROUP BY i.admin_id
+                ORDER BY MAX(a.name) ASC";
+                
+        $resultSet = Yii::app()->db->createCommand($sql)->queryAll(true, $params);
+        
+        return $resultSet;
+    }
+}

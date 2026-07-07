@@ -1,0 +1,127 @@
+<?php
+CHtml::refresh(300);
+
+$this->breadcrumbs = array(
+    'Sales Order' => array('create'),
+    'Manage',
+);
+
+Yii::app()->clientScript->registerScript('admin', "
+    $('form').submit(function(){
+        $.fn.yiiGridView.update('order-grid', {
+            data: $(this).serialize()
+        });
+        return false;
+    });
+");
+?>
+
+<h1>Data Outstanding Invoice</h1>
+<div id="detail_div">
+    <p>
+        You may optionally enter a comparison operator (<b>&lt;</b>, <b>&lt;=</b>, <b>&gt;</b>, <b>&gt;=</b>, <b>&lt;&gt;</b>
+        or <b>=</b>) at the beginning of each of your search values to specify how the comparison should be done.
+    </p>
+
+    <div id="link">
+        <?php echo CHtml::link('Manage', array('admin'), array('target' => '_blank')); ?>
+    </div>
+
+    <br />
+
+    <?php echo CHtml::beginForm(); ?>
+    <div>
+        Page Size:
+        <?php echo CHtml::dropDownList('PageSize', '', array(10 => '10', 25 => '25', 50 => '50', 100 => '100'), array(
+            'onchange' => '$("form").submit();',
+        )); ?>
+
+        Filter by Date: 
+        <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+            'name' => 'OrderHeaderDate',
+            // additional javascript options for the date picker plugin
+            'options' => array(
+                'dateFormat' => 'yy-mm-dd',
+                'onSelect' => 'js:function(dateText, inst) {
+                    $("form").submit();
+                }',
+            ),
+            'htmlOptions' => array(
+                'readonly' => true,
+            ),
+        )); ?>
+
+        <?php echo CHtml::button('Semua Tanggal', array('onclick' => '$("#OrderHeaderDate").val(""); $("form").submit();')); ?>
+    </div>
+    <?php echo CHtml::endForm(); ?>
+
+    <div style="overflow: auto">
+        <?php $this->widget('zii.widgets.grid.CGridView', array(
+            'id' => 'order-grid',
+            'dataProvider' => $dataProvider,
+            'filter' => $invoice,
+            'pager' => array('cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css'),
+            'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+            'selectionChanged' => 'js:function(id) {
+                window.location.href = "' . CController::createUrl('view', array('id' => '')) . '" + $.fn.yiiGridView.getSelection(id);
+            }',
+            'columns' => array(
+                array(
+                    'name' => 'number',
+                    'value' => '$data->number',
+                    'htmlOptions' => array('width' => '150px'),
+                ),
+                array(
+                    'header' => 'Tanggal',
+                    'name' => 'date',
+                    'filter' => false,
+                    'value' => 'Yii::app()->dateFormatter->format("d MMMM yyyy", $data->date)'
+                ),
+                array(
+                    'header' => 'TOP (hari)',
+                    'value' => '$data->customer->payment_term',
+                ),
+                array(
+                    'name' => 'customer_id',
+                    'filter' => CHtml::listData(Customer::model()->findAll(array('order' => 'name ASC')), 'id', 'name'),
+                    'value' => '$data->customer->name',
+                    'htmlOptions' => array('width' => '200px'),
+                ),
+                array(
+                    'header' => 'PO Customer',
+                    'filter' => CHtml::textField('OrderNumber', $orderNumber, array('size' => '10', 'maxLength' => '60')),
+                    'value' => '($data->orderHeader === null ) ? "" : $data->orderHeader->reference_number',
+                ),
+                array(
+                    'header' => 'Pembayaran #',
+                    'value' => 'empty($data->deliveryHeaders) ? "N/A" : $data->deliveryHeaders[0]->number',
+                ),
+                array(
+                    'header' => 'Total',
+                    'value' => 'number_format($data->grand_total, 2)',
+                    'htmlOptions' => array(
+                        'style' => 'text-align: right',
+                    ),
+                ),
+                array(
+                    'header' => 'Pembayaran',
+                    'value' => 'number_format($data->total_payment, 2)',
+                    'htmlOptions' => array(
+                        'style' => 'text-align: right',
+                    ),
+                ),
+                array(
+                    'header' => 'Sisa',
+                    'value' => 'number_format($data->remaining, 2)',
+                    'htmlOptions' => array(
+                        'style' => 'text-align: right',
+                    ),
+                ),
+                array(
+                    'class' => 'CButtonColumn',
+                    'template' => $buttonTemplate,
+                ),
+            ),
+        )); ?>
+    </div>
+</div>

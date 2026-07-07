@@ -1,0 +1,66 @@
+<?php
+
+class SaleReceiptHeader extends SaleReceiptHeaderBase
+{
+	public static function model($className = __CLASS__)
+	{
+		return parent::model($className);
+	}
+	
+	public function searchBySalePayment()
+	{
+		$criteria = new CDbCriteria;
+		
+		$criteria->order = 't.id DESC';
+		$criteria->condition = 'EXISTS (
+			SELECT h.grand_total - h.payment_total AS remaining 
+			FROM tbldl_sale_receipt_header h 
+			WHERE t.id = h.id
+			HAVING remaining > 0
+		)';
+
+		$criteria->compare('number', $this->number, true);
+		$criteria->compare('date', $this->date, true);
+		$criteria->compare('customer_id', $this->customer_id, true);
+
+		return new CActiveDataProvider($this, array(
+			'criteria' => $criteria,
+		));
+	}
+	
+	public function getTotalDetail()
+	{
+		$total = 0.00;
+		
+		foreach ($this->saleReceiptDetails as $detail)
+			$total += $detail->invoice->totalDetail;
+		
+		return $total;
+	}
+	
+//	public function getPayment()
+//	{
+//		$payment = 0.00;
+//
+//		foreach ($this->salePaymentHeaders as $paymentHeaders)
+//			foreach ($paymentHeaders->salePaymentDetails as $paymentDetails)
+//				$payment += $paymentDetails->amount;
+//
+//		return $payment;
+//	}
+
+	public function getRemaining()
+	{
+		return $this->grand_total - $this->payment_total;
+	}
+	
+//	public function getTotalSale()
+//	{
+//		$total = 0.00;
+//		
+//		foreach ($this->saleReceiptDetails as $detail)
+//			$total += $detail->invoiceHeader->orderHeader->grandTotal;
+//		
+//		return $total;
+//	}
+}

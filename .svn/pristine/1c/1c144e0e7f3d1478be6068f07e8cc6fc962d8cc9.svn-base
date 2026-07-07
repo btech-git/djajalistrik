@@ -1,0 +1,77 @@
+<?php if ($error === true && count($purchaseReceipt->details) === 0): ?>
+    <p style="color: red">Form tidak ada data untuk insert database. Minimal satu data detail untuk melakukan penyimpanan.</p>
+<?php endif; ?>
+
+<table style="border: 1px solid">
+    <tr style="background-color: #cd0a0a; color: white">
+        <th style="text-align: center; width: 15%">Pembelian #</th>
+        <th style="text-align: center; width: 15%">Tanggal</th>
+        <th style="text-align: center; width: 15%">Order #</th>
+        <th style="text-align: center; width: 15%">Invoice #</th>
+        <th style="text-align: center; width: 15%">Faktur Pajak #</th>
+        <th style="text-align: center; width: 15%">Total</th>
+        <th style="text-align: center; width: 5%"></th>
+    </tr>
+    
+    <?php foreach ($purchaseReceipt->details as $i => $detail): ?>
+        <?php echo CHtml::errorSummary($detail); ?>
+        <?php $detailPurchaseHeader = $detail->receiveHeader->purchaseHeader(array('scopes' => 'resetScope', 'with' => 'supplier:resetScope')); ?>
+        
+        <tr style="background-color: #FFF8DC">
+            <td style="width: auto">
+                <?php echo CHtml::activeHiddenField($detail, "[$i]receive_header_id"); ?>
+                <?php echo CHtml::encode(CHtml::value($detailPurchaseHeader, 'number')); ?>
+            </td>
+
+            <td style="text-align:right; width: 15%">
+                <?php echo CHtml::encode(Yii::app()->dateFormatter->format('d MMMM yyyy', strtotime(CHtml::value($detailPurchaseHeader, 'date')))); ?>
+            </td>
+
+            <td style="text-align: right">
+                <?php echo CHtml::encode(CHtml::value($detailPurchaseHeader, 'orderHeader.reference_number')); ?>
+            </td>
+
+            <td style="width: auto">
+                <?php echo CHtml::activeTextField($detail, "[$i]invoice_number"); ?>
+                <?php echo CHtml::error($detail, 'invoice_number'); ?>
+            </td>
+
+            <td style="width: auto">
+                <?php if ($detail->receiveHeader->purchaseHeader->is_tax == 1): ?>
+                    <?php echo CHtml::activeHiddenField($detail, "[$i]tax_number"); ?>
+                    <?php echo CHtml::encode(CHtml::value($detail, 'tax_number')); ?>
+                <?php else: ?>
+                    <?php echo CHtml::activeTextField($detail, "[$i]tax_number"); ?>
+                <?php endif; ?>
+                <?php echo CHtml::error($detail, 'tax_number'); ?>
+            </td>
+
+            <td style="text-align: right">
+                <?php echo CHtml::activeHiddenField($detail, "[$i]amount"); ?>
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($detail, 'amount'))); ?>
+            </td>
+            
+            <td>
+                <?php if ($detail->isNewRecord): ?>
+                    <?php echo CHtml::button('Delete', array(
+                        'onclick' => CHtml::ajax(array(
+                            'type' => 'POST',
+                            'url' => CController::createUrl('ajaxHtmlRemoveDetail', array('id' => $purchaseReceipt->header->id, 'index' => $i)),
+                            'update' => '#detail_div',
+                        )),
+                    )); ?>
+                <?php else: ?>
+                    <?php echo CHtml::activeDropDownList($detail, "[$i]is_inactive", array(ActiveRecord::ACTIVE => ActiveRecord::ACTIVE_LITERAL, ActiveRecord::INACTIVE => ActiveRecord::INACTIVE_LITERAL)); ?>
+                <?php endif; ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+        
+    <tr style="background-color: #F5DEB3">
+        <td style="text-align: right; font-weight: bold" colspan="3">Grand Total:</td>
+        <td style="text-align: right; font-weight: bold">
+            <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $purchaseReceipt->totalPurchase)); ?>
+        </td>
+        <td colspan="2"></td>
+    </tr>
+</table>

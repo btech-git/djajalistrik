@@ -1,0 +1,115 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property string $number
+ * @property string $date
+ * @property string $customer_order_date
+ * @property string $note
+ * @property string $grand_total
+ * @property string $total_payment
+ * @property integer $order_header_id
+ * @property integer $customer_id
+ * @property integer $branch_id
+ * @property integer $admin_id
+ * @property integer $is_inactive
+ * @property integer $is_tax
+ * @property integer $is_include
+ * @property integer $is_approved
+ * @property integer $tax_percentage
+ * @property string $deposit
+ * @property string $shipping_fee
+ * @property string $tax_number
+ *
+ * @property InvoiceDetail[] $invoiceDetails
+ * @property OrderHeader $orderHeader
+ * @property Customer $customer
+ * @property Branch $branch
+ * @property Admin $admin
+ * @property InvoiceNewProduct[] $invoiceNewProducts
+ * @property SalePaymentHeader[] $salePaymentHeaders
+ * @property SalePaymentDetail[] $salePaymentDetails
+ */
+class InvoiceHeaderBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_invoice_header';
+    }
+
+    public function rules() {
+        return array(
+            array('number, date, order_header_id, customer_id, branch_id, admin_id', 'required'),
+            array('order_header_id, customer_id, branch_id, admin_id, is_inactive, is_tax, is_include, tax_percentage, is_approved', 'numerical', 'integerOnly' => true),
+            array('number, tax_number', 'length', 'max' => 20),
+            array('grand_total, total_payment, deposit, shipping_fee', 'length', 'max' => 18),
+            array('note, customer_order_date', 'safe'),
+            // The following rule is used by search().
+            array('id, number, date, note, grand_total, total_payment, order_header_id, customer_id, branch_id, admin_id, is_inactive, is_tax, is_include, is_approved, deposit, shipping_fee, tax_number, customer_order_date, tax_percentage', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'invoiceDetails' => array(self::HAS_MANY, 'InvoiceDetail', 'invoice_header_id'),
+            'orderHeader' => array(self::BELONGS_TO, 'OrderHeader', 'order_header_id'),
+            'customer' => array(self::BELONGS_TO, 'Customer', 'customer_id'),
+            'branch' => array(self::BELONGS_TO, 'Branch', 'branch_id'),
+            'admin' => array(self::BELONGS_TO, 'Admin', 'admin_id'),
+            'invoiceNewProducts' => array(self::HAS_MANY, 'InvoiceNewProduct', 'invoice_header_id'),
+            'salePaymentHeaders' => array(self::HAS_MANY, 'SalePaymentHeader', 'invoice_header_id'),
+            'salePaymentDetails' => array(self::HAS_MANY, 'SalePaymentDetail', 'invoice_header_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'number' => 'Number',
+            'date' => 'Date',
+            'customer_order_date' => 'Tanggal PO',
+            'note' => 'Note',
+            'grand_total' => 'Grand Total',
+            'total_payment' => 'Total Payment',
+            'order_header_id' => 'Order Header',
+            'customer_id' => 'Customer',
+            'branch_id' => 'Branch',
+            'admin_id' => 'Admin',
+            'is_inactive' => 'Is Inactive',
+            'is_tax' => 'Is Tax',
+            'is_include' => 'Is Include',
+            'deposit' => 'Deposit',
+            'shipping_fee' => 'Shipping Fee',
+            'tax_number' => 'Faktur Pajak #',
+            'tax_percentage' => 'Tax Percentage',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.customer_order_date', $this->customer_order_date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+        $criteria->compare('t.tax_number', $this->tax_number, true);
+        $criteria->compare('t.tax_percentage', $this->tax_percentage);
+        $criteria->compare('t.is_approved', $this->is_approved);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+}

@@ -1,0 +1,362 @@
+<?php
+
+class SalePaymentController extends Controller {
+
+    public function filters() {
+        return array(
+            'access',
+        );
+    }
+
+    public function filterAccess($filterChain) {
+        if ($filterChain->action->id === 'create' || $filterChain->action->id === 'update' || $filterChain->action->id === 'ajaxJsonSaleReceipt' || $filterChain->action->id === 'ajaxHtmlSummary' || $filterChain->action->id === 'ajaxHtmlAddPayment' || $filterChain->action->id === 'ajaxHtmlRemovePayment' || $filterChain->action->id === 'ajaxHtmlResetPayment' || $filterChain->action->id === 'memo' || $filterChain->action->id === 'view') {
+            if (!(Yii::app()->user->checkAccess('salePaymentCreate') || Yii::app()->user->checkAccess('salePaymentEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'delete' || $filterChain->action->id === 'admin') {
+            if (!(Yii::app()->user->checkAccess('salePaymentEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'report') {
+            if (!(Yii::app()->user->checkAccess('salePaymentReport')))
+                $this->redirect(array('/site/login'));
+        }
+
+        $filterChain->run();
+    }
+
+    public function actionCreate() {
+        $salePayment = $this->instantiate(null);
+        $salePayment->header->number = CodeNumber::make($salePayment->header, 'number', 'SPY', Yii::app()->user);
+        $salePayment->header->admin_id = Yii::app()->user->id;
+        $salePayment->header->branch_id = Yii::app()->user->branch_id;
+
+        $invoiceHeader = Search::bind(new InvoiceHeader('search'), isset($_GET['InvoiceHeader']) ? $_GET['InvoiceHeader'] : array());
+        $dataProvider = $invoiceHeader->searchBySalePayment();
+        $dataProvider->criteria->with = array(
+            'orderHeader',
+            'customer'
+        );
+
+        $error = false;
+        if (isset($_POST['Submit'])) {
+            $this->loadState($salePayment);
+
+            if ($salePayment->save(Yii::app()->db)) {
+                Yii::app()->session['SalePaymentMemoAllowed'] = true;
+                $this->redirect(array('view', 'id' => $salePayment->header->id));
+            } else
+                $error = true;
+        }
+
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+
+        $this->render('create', array(
+            'salePayment' => $salePayment,
+            'invoiceHeader' => $invoiceHeader,
+            'dataProvider' => $dataProvider,
+            'error' => $error,
+        ));
+    }
+
+    public function actionUpdate($id) {
+        $salePayment = $this->instantiate($id);
+
+        $salePayment->header->admin_id = Yii::app()->user->id;
+
+        $invoiceHeader = Search::bind(new InvoiceHeader('search'), isset($_GET['InvoiceHeader']) ? $_GET['InvoiceHeader'] : array());
+        $dataProvider = $invoiceHeader->searchBySalePayment();
+        $dataProvider->criteria->with = array(
+            'orderHeader',
+            'customer'
+        );
+
+        $error = false;
+        if (isset($_POST['Submit'])) {
+            $this->loadState($salePayment);
+
+            if ($salePayment->save(Yii::app()->db))
+                $this->redirect(array('view', 'id' => $salePayment->header->id));
+            else
+                $error = true;
+        }
+
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+
+        $this->render('update', array(
+            'salePayment' => $salePayment,
+            'invoiceHeader' => $invoiceHeader,
+            'dataProvider' => $dataProvider,
+            'error' => $error,
+        ));
+    }
+
+    public function actionView($id) {
+        $salePayment = $this->loadModel($id);
+
+        $invoice = $salePayment->invoiceHeader(array('scopes' => 'resetScope'));
+        $branch = $salePayment->branch(array('scopes' => 'resetScope'));
+
+        $criteria = new CDbCriteria;
+        $criteria->compare('sale_payment_header_id', $salePayment->id);
+        $detailsDataProvider = new CActiveDataProvider('SalePaymentDetail', array(
+            'criteria' => $criteria,
+        ));
+
+        $detailsDataProvider->criteria->with = array(
+            'paymentType:resetScope'
+        );
+
+        $this->render('view', array(
+            'salePayment' => $salePayment,
+            'invoice' => $invoice,
+            'branch' => $branch,
+            'detailsDataProvider' => $detailsDataProvider,
+        ));
+    }
+
+    public function actionMemo($id) {
+        if (!(Yii::app()->user->checkAccess('administrator'))) {
+            if (!(isset(Yii::app()->session['SalePaymentMemoAllowed']) && Yii::app()->session['SalePaymentMemoAllowed'] === true))
+                $this->redirect(array('admin'));
+        }
+
+        Yii::app()->session->remove('SalePaymentMemoAllowed');
+
+        $salePayment = $this->loadModel($id);
+
+        $branch = $salePayment->branch(array('scopes' => 'resetScope'));
+        $invoice = $salePayment->invoiceHeader(array(
+            'scopes' => 'resetScope',
+            'with' => array(
+                'customer'
+            )
+        ));
+
+        $salePaymentDetails = $salePayment->salePaymentDetails(array(
+            'with' => array(
+                'paymentType:resetScope'
+            ),
+        ));
+
+        $this->render('memo', array(
+            'salePayment' => $salePayment,
+            'invoice' => $invoice,
+            'branch' => $branch,
+            'salePaymentDetails' => $salePaymentDetails,
+        ));
+    }
+
+    public function actionAdmin() {
+        $salePayment = Search::bind(new SalePaymentHeader('search'), isset($_GET['SalePaymentHeader']) ? $_GET['SalePaymentHeader'] : array());
+
+        $customerId = (isset($_GET['CustomerId'])) ? $_GET['CustomerId'] : '';
+        $invoiceNumber = (isset($_GET['InvoiceNumber'])) ? $_GET['InvoiceNumber'] : '';
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : 10;
+        $salePaymentHeaderDate = (isset($_GET['SalePaymentHeaderDate'])) ? $_GET['SalePaymentHeaderDate'] : '';
+
+        $dataProvider = $salePayment->search();
+        $dataProvider->criteria->with = array(
+            'invoiceHeader' => array(
+                'with' => array(
+                    'orderHeader',
+                    'customer',
+                ),
+            ),
+            'branch',
+        );
+
+        if (!empty($customerId)) {
+            $dataProvider->criteria->addCondition('invoiceHeader.customer_id = :customer_id');
+            $dataProvider->criteria->params[':customer_id'] = $customerId;
+        }
+
+        if (!empty($invoiceNumber)) {
+            $dataProvider->criteria->addCondition('invoiceHeader.number LIKE :invoice_number');
+            $dataProvider->criteria->params[':invoice_number'] = "%{$invoiceNumber}%";
+        }
+
+        if (!empty($salePaymentHeaderDate)) {
+            $dataProvider->criteria->addCondition('t.date = :date');
+            $dataProvider->criteria->params[':date'] = $salePaymentHeaderDate;
+        }
+
+        $dataProvider->criteria->order = 't.id DESC';
+        $dataProvider->pagination->pageSize = $pageSize;
+
+        $buttonTemplate = '{view}';
+        if (Yii::app()->user->checkAccess('salePaymentEdit'))
+            $buttonTemplate .= '{update}';
+        if (Yii::app()->user->checkAccess('administrator'))
+            $buttonTemplate .= '{delete}';
+
+        $this->render('admin', array(
+            'salePayment' => $salePayment,
+            'customerId' => $customerId,
+            'invoiceNumber' => $invoiceNumber,
+            'dataProvider' => $dataProvider,
+            'buttonTemplate' => $buttonTemplate,
+        ));
+    }
+
+    public function actionDelete($id) {
+        if (Yii::app()->request->isPostRequest) {
+            $salePaymentHeader = $this->loadModel($id);
+
+            if ($salePaymentHeader !== null) {
+                $salePaymentHeader->is_inactive = !$salePaymentHeader->is_inactive;
+                $salePaymentHeader->update(array('is_inactive'));
+
+                if (count($salePaymentHeader->salePaymentDetails) > 0) {
+                    foreach ($salePaymentHeader->salePaymentDetails as $detail) {
+                        $detail->is_inactive = ActiveRecord::INACTIVE;
+                        $detail->update(array('is_inactive'));
+                    }
+                }
+                
+                $invoiceHeader = $salePaymentHeader->invoiceHeader; 
+                $invoiceHeader->total_payment = $invoiceHeader->getTotalPayment();
+                $invoiceHeader->update(array('total_payment'));
+            }
+
+            if (!isset($_GET['ajax'])) {
+                $this->redirect(isset($_POST['returnUrl']) ? $_POST['returnUrl'] : array('admin'));
+            }
+        } else {
+            throw new CHttpException(400, 'Invalid request. Please do not repeat this request again.');
+        }
+    }
+
+    public function actionAjaxJsonInvoice($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $invoiceId = (isset($_POST['SalePaymentHeader']['invoice_header_id'])) ? $_POST['SalePaymentHeader']['invoice_header_id'] : '';
+
+            $invoice = InvoiceHeader::model()->findByPk($invoiceId);
+            $customer = $invoice->customer(array('scopes' => 'resetScope'));
+
+            $object = array(
+                'invoice_number' => CHtml::value($invoice, 'number'),
+                'invoice_date' => CHtml::encode(Yii::app()->dateFormatter->format("d MMMM yyyy", CHtml::value($invoice, 'date'))),
+                'invoice_customer' => CHtml::value($customer, 'name'),
+                'grand_total' => CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($invoice, 'remaining'))),
+            );
+
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxJsonSummary($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $salePayment = $this->instantiate($id);
+
+            $this->loadState($salePayment);
+
+            $amount = CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment->details[$index], 'amount')));
+            $total = CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'totalReceipt')));
+            $payment = CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'payment')));
+            $remaining = CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'remaining')));
+            $total_payment = CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($salePayment, 'totalPayment')));
+
+            echo CJSON::encode(array(
+                'amount' => $amount,
+                'total' => $total,
+                'payment' => $payment,
+                'remaining' => $remaining,
+                'total_payment' => $total_payment,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlAddPayment($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $salePayment = $this->instantiate($id);
+
+            $this->loadState($salePayment);
+
+            if (isset($_POST['SalePaymentHeader']['invoice_header_id']))
+                $salePayment->addDetail($_POST['SalePaymentHeader']['invoice_header_id']);
+
+            $this->renderPartial('_detail', array(
+                'salePayment' => $salePayment,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlRemovePayment($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $salePayment = $this->instantiate($id);
+
+            $this->loadState($salePayment);
+
+            $salePayment->removeDetailAt($index);
+
+            $this->renderPartial('_detail', array(
+                'salePayment' => $salePayment,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlResetPayment($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $salePayment = $this->instantiate($id);
+
+            $this->loadState($salePayment);
+
+            if (isset($_POST['SalePaymentHeader']['sale_receipt_header_id']))
+                $salePayment->resetPayment($_POST['SalePaymentHeader']['sale_receipt_header_id']);
+
+            $this->renderPartial('_detail', array(
+                'salePayment' => $salePayment,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function instantiate($id) {
+        if (empty($id))
+            $salePayment = new SalePayment(new SalePaymentHeader(), array());
+        else {
+            $salePaymentHeader = $this->loadModel($id);
+            $salePayment = new SalePayment($salePaymentHeader, $salePaymentHeader->salePaymentDetails);
+        }
+
+        return $salePayment;
+    }
+
+    public function loadModel($id) {
+        $model = SalePaymentHeader::model()->findByPk($id);
+        if ($model === null)
+            throw new CHttpException(404, 'The requested page does not exist.');
+        return $model;
+    }
+
+    public function loadState($salePayment) {
+        if (isset($_POST['SalePaymentHeader'])) {
+            $salePayment->header->attributes = $_POST['SalePaymentHeader'];
+        }
+        if (isset($_POST['SalePaymentDetail'])) {
+            foreach ($_POST['SalePaymentDetail'] as $i => $item) {
+
+                if (isset($salePayment->details[$i]))
+                    $salePayment->details[$i]->attributes = $item;
+                else {
+                    $detail = new SalePaymentDetail();
+                    $detail->attributes = $item;
+                    $salePayment->details[] = $detail;
+                }
+            }
+            if (count($_POST['SalePaymentDetail']) < count($salePayment->details))
+                array_splice($salePayment->details, $i + 1);
+        } else
+            $salePayment->details = array();
+    }
+
+}
+
+?>

@@ -1,0 +1,155 @@
+<?php
+Yii::app()->clientScript->registerScript('memo', '
+    $("#header").addClass("hide");
+    $("#mainmenu").addClass("hide");
+    $(".breadcrumbs").addClass("hide");
+    $("#footer").addClass("hide");
+');
+Yii::app()->clientScript->registerCssFile(Yii::app()->request->baseUrl . '/css/transaction/memo.css');
+Yii::app()->clientScript->registerCss('memo', '
+    .hcolumn1 { width: 50% }
+    .hcolumn2 { width: 50% }
+
+    .hcolumn1header { width: 35% }
+    .hcolumn1value { width: 65% }
+    .hcolumn2header { width: 35% }
+    .hcolumn2value { width: 65% }
+
+    .sig1 { width: 50% }
+    .sig2 { width: 25% }
+    .sig3 { width: 25% }
+    
+    div#memoheader {text-align:left !important;}
+    .memonote {width: 100% !important;}
+		
+');
+?>
+<div id="detail_div_memo">
+    <div id="memoheader">
+        <div id="logo">
+            <?php if (!empty($saleReceipt->branch->filename)): ?>
+                <?php echo CHtml::image(Yii::app()->request->baseUrl . '/images/' . CHtml::encode(CHtml::value($saleReceipt, 'branch.filename')), CHtml::encode(CHtml::value($saleReceipt, 'branch.filename')), array('style' => 'width: 200px;')); ?>
+            <?php else: ?>
+                <?php echo ''; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <br />
+
+    <div class="memonote">
+        <div class="divtable">
+            <div class="divtablecell hcolumn1">
+                <div class="divtable">
+                    <div class="divtablerow">
+                        <div class="divtablecell info hcolumn1value" style="font-size:120%;font-weight: bold">
+                            <?php echo CHtml::encode(CHtml::value($branch, 'name')); ?>
+                        </div>
+                    </div>
+
+                    <div class="divtablerow">
+                        <div class="divtablecell info hcolumn1value"><?php echo nl2br(CHtml::encode($branch->address)); ?></div>
+                    </div>
+
+                    <br/>
+
+                    <table style="border-left:1px solid black;width: 83.5%; border-right: 1px solid black; border-top: 1px solid black; border-bottom:1px solid black">
+                        <tr>
+                            <td style="border-bottom:1px solid; background-color:lightgray; font-weight: bold">TT No.</td>
+                            <td style="border-bottom:1px solid"><?php echo CHtml::encode($saleReceipt->number); ?></td>
+                        </tr>
+
+                        <tr>
+                            <td style="border-bottom:1px solid; background-color:lightgray; font-weight: bold">Tanggal Kirim</td>
+                            <td style="border-bottom:1px solid">
+                                <?php echo CHtml::encode(Yii::app()->dateFormatter->format('d-MMM-yyyy', strtotime(CHtml::value($saleReceipt, 'delivery_date')))); ?>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="divtablecell hcolumn2">
+                <div class="divtable">
+                    <div style="background-color:lightgray; font-size: 150%; font-weight: bold; text-align: center">TANDA TERIMA</div>
+
+                    <br/>
+
+                    <table style="border-left:1px solid black; border-right: 1px solid black; border-top: 1px solid black; border-bottom:1px solid black">
+                        <tr style="background-color:lightgray">
+                            <td>Kepada Yth.</td>
+                        </tr>
+
+                        <tr>
+                            <td style="font-weight:bold"><?php echo CHtml::encode(CHtml::value($saleReceipt, 'customer.company')); ?></td>
+                        </tr>
+
+                        <tr>
+                            <td><?php echo nl2br(CHtml::encode(CHtml::value($saleReceipt, 'delivery_address'))); ?></td>
+                        </tr>
+
+                        <tr>
+                            <td><?php echo CHtml::encode(CHtml::value($saleReceipt, 'customer.tax_number')); ?></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <br />
+
+    <table class="memo">
+        <tr id="theader">
+            <th style="width: 20%">Invoice #</th>
+            <th style="width: 20%">F. Pajak #</th>
+            <th>PO #</th>
+            <th style="width: 15%">Tanggal</th>
+            <th style="width: 15%">Total</th>
+        </tr>
+        <?php foreach ($saleReceiptDetails as $detail): ?>
+            <tr class="titems">
+                <td><?php echo CHtml::encode(CHtml::value($detail, 'invoiceHeader.number')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($detail, 'invoiceHeader.tax_number')); ?></td>
+                <td style="text-align: center"><?php echo CHtml::encode(CHtml::value($detail, 'invoiceHeader.orderHeader.reference_number')); ?></td>
+                <td><?php echo CHtml::encode(Yii::app()->dateFormatter->format('d MMM yyyy', strtotime(CHtml::value($detail, 'invoiceHeader.date')))); ?></td>
+                <td style="text-align: right">
+                    <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($detail, 'invoice_amount'))); ?>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        <tr>
+            <td colspan ="4" style="border-top: 2px solid; font-weight: bold; text-align: right">Grand Total</td>
+            <td style="border-top: 2px solid; font-weight: bold; text-align: right">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0', CHtml::value($saleReceipt, 'total_invoice'))); ?>
+            </td>
+        </tr>	
+    </table>
+
+    <br />
+
+    <div class="memosig">
+        <div class="divtable">
+            <div class="divtablecell sig1" style="text-align: left">
+                <div>CATATAN: <?php echo nl2br(CHtml::encode(CHtml::value($saleReceipt, 'note'))); ?></div>
+                <div>Untuk pembayaran harap di transfer kepada <?php echo CHtml::encode(CHtml::value($branch, 'name')); ?></div>
+                <div>
+                    <?php echo CHtml::encode(CHtml::value($saleReceipt, 'branch.bank_account_name')); ?> - 
+                    <?php echo CHtml::encode(CHtml::value($saleReceipt, 'branch.bank_name')); ?> - 
+                    <?php echo CHtml::encode(CHtml::value($saleReceipt, 'branch.bank_account_number')); ?>
+                </div>
+                <div><?php echo nl2br(CHtml::encode(CHtml::value($saleReceipt, 'branch.invoice_note'))); ?></div>
+            </div>
+            <div class="divtablecell sig2">
+                <div>Penerima,</div>
+                <div style="height: 100px">&nbsp;</div>
+                <div>(..........................)</div>
+            </div>
+            <div class="divtablecell sig3">
+                <div>Jakarta, <?php echo CHtml::encode(Yii::app()->dateFormatter->format('d MMM yyyy', strtotime(CHtml::value($saleReceipt, 'delivery_date')))); ?></div>
+                <div style="height: 100px">&nbsp;</div>
+                <div style="font-weight: bold"><?php echo CHtml::encode(CHtml::value($branch, 'name')); ?></div>
+            </div>
+        </div>
+    </div>
+</div>

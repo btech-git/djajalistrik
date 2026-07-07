@@ -1,0 +1,154 @@
+<?php
+CHtml::refresh(300);
+
+$this->breadcrumbs = array(
+    'Sales Order' => array('create'),
+    'Manage',
+);
+
+Yii::app()->clientScript->registerScript('outstanding', "
+    $('form').submit(function(){
+        $.fn.yiiGridView.update('outstanding-grid', {
+            data: $(this).serialize()
+        });
+        return false;
+    });
+");
+?>
+
+<h1>Data Outstanding Sales Order</h1>
+<div id="detail_div">
+    <?php echo CHtml::beginForm(array(''), 'get'); ?>
+    <p>
+        You may optionally enter a comparison operator (<b>&lt;</b>, <b>&lt;=</b>, <b>&gt;</b>, <b>&gt;=</b>, <b>&lt;&gt;</b>
+        or <b>=</b>) at the beginning of each of your search values to specify how the comparison should be done.
+    </p>
+
+    <div id="link">
+        <?php echo CHtml::hiddenField('page', '', array('size' => 3, 'id' => 'CurrentPage')); ?>
+        <?php echo CHtml::link('View', '#', array('id' => 'ViewLink', 'target' => '_blank', 'style' => 'display: none')); ?>
+        <?php echo CHtml::link('Manage', array('admin'), array('target' => '_blank', 'style' => 'float: right')); ?>
+    </div>
+
+    <br /><br />
+
+    <div>
+        <!--Page Size:-->
+        <?php /*echo CHtml::dropDownList('PageSize', '', array(
+            10 => '10', 
+            25 => '25', 
+            50 => '50', 
+            100 => '100'
+        ), array('onchange' => '$("form").submit();',));*/ ?>
+
+        Filter by Date: 
+        <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+            'name' => 'OrderHeaderDate',
+            'value' => $orderHeaderDate,
+            // additional javascript options for the date picker plugin
+            'options' => array(
+                'dateFormat' => 'yy-mm-dd',
+                'onSelect' => 'js:function(dateText, inst) {
+                    $("form").submit();
+                }',
+            ),
+            'htmlOptions' => array('readonly' => true,),
+        )); ?>
+
+        <?php echo CHtml::button('Semua Tanggal', array('onclick' => '$("#OrderHeaderDate").val(""); $("form").submit();')); ?>
+    </div>
+    
+    <?php echo CHtml::endForm(); ?>
+
+    <br />
+
+    <div>
+        <?php $this->widget('zii.widgets.grid.CGridView', array(
+            'id' => 'outstanding-grid',
+            'dataProvider' => $dataProvider,
+            'filter' => $order,
+            'pager' => array('cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css'),
+            'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+            'selectionChanged' => 'js:function(id) {
+                var url = "' . CController::createUrl('view') . '";
+                $("#ViewLink").attr("href", url + "&id=" + $.fn.yiiGridView.getSelection(id));
+                document.getElementById("ViewLink").click();
+            }',
+            'columns' => array(
+                array(
+                    'name' => 'number',
+                    'value' => '$data->number',
+                    'htmlOptions' => array('width' => '150px'),
+                ),
+//                array(
+//                    'name' => 'branch_id',
+//                    'filter' => CHtml::listData(Branch::model()->findAll(), 'id', 'name'),
+//                    'value' => '$data->branch->code',
+//                ),
+                array(
+                    'header' => 'Tanggal',
+                    'name' => 'date',
+                    'filter' => false,
+                    'value' => 'Yii::app()->dateFormatter->format("d MMMM yyyy", $data->date)'
+                ),
+                array(
+                    'name' => 'customer_id',
+                    'filter' => CHtml::activeDropDownList($order, 'customer_id', CHtml::listData(Customer::model()->findAll(array(
+                        'condition' => 't.is_inactive = 0',
+                        'order' => 'company ASC'
+                    )), 'id', 'name'), array('empty' => '-- All --')),
+                    'value' => '$data->customer->name',
+                    'htmlOptions' => array('width' => '200px'),
+                ),
+                array(
+                    'header' => 'PO Customer',
+                    'name' => 'reference_number',
+                    'value' => '$data->reference_number',
+                ),
+                'note_internal',
+                array(
+                    'header' => 'PO #',
+                    'value' => '$data->purchaseNumber',
+                    'type' => 'raw',
+                ),
+                array(
+                    'header' => 'Pengiriman #',
+                    'value' => '$data->deliveryNumber',
+                    'type' => 'raw',
+                ),
+                array(
+                    'header' => 'Invoice #',
+                    'value' => '$data->invoiceNumber',
+                    'type' => 'raw',
+                ),
+                array(
+                    'header' => 'Total Order (Rp)',
+                    'value' => 'number_format($data->grandTotal, 2)',
+                    'htmlOptions' => array(
+                        'style' => 'text-align: right',
+                    ),
+                ),
+                array(
+                    'header' => 'Total Invoice (Rp)',
+                    'name' => 'reference_number',
+                    'filter' => false,
+                    'value' => 'number_format($data->totalInvoice, 2)',
+                    'htmlOptions' => array('style' => 'text-align: right')
+                ),
+                array(
+                    'header' => 'User Input',
+                    'name' => 'admin_id',
+                    'filter' => CHtml::activeDropDownList($order, 'admin_id', CHtml::listData(Admin::model()->findAll(array(
+                        'condition' => 't.is_inactive = 0',
+                        'order' => 't.username ASC'
+                    )), 'id', 'name'), array('empty' => '-- All --')),
+                    'value' => '$data->admin->name',
+                ),
+                array(
+                    'class' => 'CButtonColumn',
+                    'template' => $buttonTemplate,
+                ),
+            ),
+        )); ?>
+    </div>
+</div>

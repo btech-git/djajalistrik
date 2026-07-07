@@ -1,0 +1,172 @@
+<?php
+
+class InvoiceHeader extends InvoiceHeaderBase {
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->invoiceDetails as $detail) {
+            $amount = (int) $detail->is_inactive == 0 ? $detail->total : 0.00;
+            $total += $amount;
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->invoiceNewProducts as $newProduct) {
+            $amount = (int) $newProduct->is_inactive == 0 ? $newProduct->total : 0.00;
+            $total += $amount;
+        }
+
+        return $total;
+    }
+
+    public function getSubTotal() {
+        $subTotal = $this->totalDetail + $this->totalNewProduct;
+
+        if ((int) $this->is_tax === OrderHeader::TAX && (int) $this->is_include === OrderHeader::INCLUDE_TAX) {
+            $subTotal = $subTotal / (1 + ($this->tax_percentage / 100));
+        }
+
+        return $subTotal;
+    }
+
+    public function getTotalTax() {
+
+        return ((int) $this->is_tax === OrderHeader::TAX) ? $this->subTotal * $this->tax_percentage / 100 : 0;
+    }
+
+    public function getGrandTotal() {
+
+        return $this->subTotal + $this->totalTax;
+    }
+
+    public function getRemaining() {
+        return $this->grand_total - $this->total_payment;
+    }
+
+    public function getTotalPayment() {
+        $total = 0.00;
+
+        foreach ($this->salePaymentHeaders as $header) {
+            $total += $header->totalDetail;
+        }
+
+        return $total;
+    }
+
+    public function searchBySalePayment() {
+        $criteria = new CDbCriteria;
+
+        $criteria->order = 't.id DESC';
+        $criteria->condition = "grand_total - total_payment > 100";
+
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.is_inactive', 0);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function searchByOutstanding() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.id NOT IN (
+            SELECT invoice_header_id 
+            FROM " . SalePaymentHeader::model()->tableName() . " 
+            WHERE is_inactive = 0
+        ) AND t.is_inactive = 0";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByApproval() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "t.is_approved = 0 AND t.is_tax = 0 AND t.tax_percentage > 0 AND t.tax_number IS NULL AND t.is_inactive = 0";
+
+        $criteria->compare('t.id', $this->id);
+        $criteria->compare('t.number', $this->number, true);
+        $criteria->compare('t.date', $this->date, true);
+        $criteria->compare('t.note', $this->note, true);
+        $criteria->compare('t.grand_total', $this->grand_total, true);
+        $criteria->compare('t.total_payment', $this->total_payment, true);
+        $criteria->compare('t.order_header_id', $this->order_header_id);
+        $criteria->compare('t.customer_id', $this->customer_id);
+        $criteria->compare('t.branch_id', $this->branch_id);
+        $criteria->compare('t.admin_id', $this->admin_id);
+        $criteria->compare('t.is_inactive', $this->is_inactive);
+        $criteria->compare('t.is_tax', $this->is_tax);
+        $criteria->compare('t.is_include', $this->is_include);
+        $criteria->compare('t.deposit', $this->deposit, true);
+        $criteria->compare('t.shipping_fee', $this->shipping_fee, true);
+
+        return new CActiveDataProvider(get_class($this), array(
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => Yii::app()->user->getState('pageSize', Yii::app()->params['defaultPageSize']),
+            )
+        ));
+    }
+
+    public function searchByReportOutstanding($endDate, $customerId, $branchId) {
+        
+        $branchConditionSql = '';
+        $customerConditionSql = '';
+        $params = array(
+            ':end_date' => $endDate,
+        );
+        
+        if (!empty($branchId)) {
+            $branchConditionSql = ' AND i.branch_id = :branch_id';
+            $params[':branch_id'] = $branchId;
+        }
+
+        if (!empty($customerId)) {
+            $customerConditionSql = ' AND i.customer_id = :customer_id';
+            $params[':customer_id'] = $customerId;
+        }
+
+        $sql = "SELECT i.id, i.number, i.date AS transaction_date, o.reference_number AS order_number, c.company AS customer_company, b.name AS branch_name, i.grand_total, COALESCE(i.total_payment, 0) AS total_payment, i.grand_total - i.total_payment AS remaining
+                FROM " . InvoiceHeader::model()->tableName() . " i
+                INNER JOIN " . OrderHeader::model()->tableName() . " o ON o.id = i.order_header_id
+                INNER JOIN " . Customer::model()->tableName() . " c ON c.id = i.customer_id
+                INNER JOIN " . Branch::model()->tableName() . " b ON b.id = i.branch_id
+                WHERE i.date < :end_date AND i.grand_total - COALESCE(i.total_payment, 0) > 100 AND i.is_inactive = 0" . $branchConditionSql . $customerConditionSql;
+        
+        $resultSet = CActiveRecord::$db->createCommand($sql)->queryAll(true, $params);
+
+        return $resultSet;
+    }
+}

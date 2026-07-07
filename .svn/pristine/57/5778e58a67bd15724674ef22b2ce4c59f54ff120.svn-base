@@ -1,0 +1,143 @@
+<?php
+
+class SiteController extends Controller {
+
+    /**
+     * Declares class-based actions.
+     */
+    public function actions() {
+        return array(
+            // captcha action renders the CAPTCHA image displayed on the contact page
+            'captcha' => array(
+                'class' => 'CCaptchaAction',
+                'backColor' => 0xFFFFFF,
+            ),
+            // page action renders "static" pages stored under 'protected/views/site/pages'
+            // They can be accessed via: index.php?r=site/page&view=FileName
+            'page' => array(
+                'class' => 'CViewAction',
+            ),
+        );
+    }
+
+    /**
+     * This is the default 'index' action that is invoked
+     * when an action is not explicitly requested by users.
+     */
+    public function actionIndex() {
+        $customer = Search::bind(new Customer('search'), isset($_GET['Customer']) ? $_GET['Customer'] : array());
+        $product = Search::bind(new Product('search'), isset($_GET['Product']) ? $_GET['Product'] : array());
+        $purchaseReceipt = Search::bind(new PurchaseReceiptHeader('search'), isset($_GET['PurchaseReceiptHeader']) ? $_GET['PurchaseReceiptHeader'] : array());
+        $invoiceHeader = Search::bind(new InvoiceHeader('search'), isset($_GET['InvoiceHeader']) ? $_GET['InvoiceHeader'] : array());
+
+        $purchaseReceiptDataProvider = $purchaseReceipt->searchByPurchasePayment();
+        $purchaseReceiptDataProvider->criteria->with = array(
+            'supplier:resetScope',
+        );
+
+        $invoiceDataProvider = $invoiceHeader->searchByCustomerReceivable();
+        $invoiceDataProvider->criteria->with = array(
+            'customer:resetScope',
+        );
+
+        $id = (isset($_GET['PurchaseHeaderId'])) ? $_GET['PurchaseHeaderId'] : '';
+        $start = (isset($_GET['Start'])) ? $_GET['Start'] : 1;
+        $end = (isset($_GET['End'])) ? $_GET['End'] : 10;
+
+        $number = '';
+        $purchase = PurchaseHeader::model()->findByPk($id);
+        if ($purchase !== null)
+            $number = $purchase->number;
+
+        $purchaseHeader = new PurchaseHeader('search');
+        $purchaseHeader->unsetAttributes();  // clear any default values
+        if (isset($_GET['PurchaseHeader']))
+            $purchaseHeader->attributes = $_GET['PurchaseHeader'];
+
+        $id = (isset($_GET['OrderHeaderId'])) ? $_GET['OrderHeaderId'] : '';
+        $start = (isset($_GET['Start'])) ? $_GET['Start'] : 1;
+        $end = (isset($_GET['End'])) ? $_GET['End'] : 10;
+
+        $purchaseData = PurchaseHeader::makeChartData(5);
+
+        $number = '';
+        $order = OrderHeader::model()->findByPk($id);
+        if ($order !== null) {
+            $number = $order->number;
+        }
+
+        $orderHeader = new OrderHeader('search');
+        $orderHeader->unsetAttributes();  // clear any default values
+        if (isset($_GET['OrderHeader'])) {
+            $orderHeader->attributes = $_GET['OrderHeader'];
+        }
+
+        $orderData = OrderHeader::makeChartData(5);
+
+        $this->render('index', array(
+            'customer' => $customer,
+            'product' => $product,
+            'purchaseReceipt' => $purchaseReceipt,
+            'invoiceHeader' => $invoiceHeader,
+            'id' => $id,
+            'number' => $number,
+            'purchaseHeader' => $purchaseHeader,
+            'orderHeader' => $orderHeader,
+            'purchaseReceiptDataProvider' => $purchaseReceiptDataProvider,
+            'invoiceDataProvider' => $invoiceDataProvider,
+            'chartData' => json_encode($purchaseData),
+            'chartAxisX' => json_encode(PurchaseHeader::makeChartAxisX($purchaseData['data'])),
+            'chartAxisY' => json_encode(PurchaseHeader::makeChartAxisY($purchaseData['data'], 10)),
+            'chartSaleData' => json_encode($orderData),
+            'chartSaleAxisX' => json_encode(OrderHeader::makeChartAxisX($orderData['data'])),
+            'chartSaleAxisY' => json_encode(OrderHeader::makeChartAxisY($orderData['data'], 10)),
+        ));
+    }
+
+    /**
+     * This is the action to handle external exceptions.
+     */
+    public function actionError() {
+        if ($error = Yii::app()->errorHandler->error) {
+            if (Yii::app()->request->isAjaxRequest)
+                echo $error['message'];
+            else
+                $this->render('error', $error);
+        }
+    }
+
+    /**
+     * Displays the login page
+     */
+    public function actionLogin() {
+        $this->layout = '//layouts/login';
+
+        $model = new LoginForm;
+
+        // if it is ajax validation request
+        if (isset($_POST['ajax']) && $_POST['ajax'] === 'login-form') {
+            echo CActiveForm::validate($model);
+            Yii::app()->end();
+        }
+
+        // collect user input data
+        if (isset($_POST['LoginForm'])) {
+            $model->attributes = $_POST['LoginForm'];
+            // validate user input and redirect to the previous page if valid
+            if ($model->validate() && $model->login())
+                $this->redirect(array('index'));
+        }
+        // display the login form
+        $this->render('login', array('model' => $model));
+    }
+
+    /**
+     * Logs out the current user and redirect to homepage.
+     */
+    public function actionLogout() {
+        Yii::app()->user->logout();
+        Yii::app()->request->cookies->clear();
+        $this->redirect(Yii::app()->homeUrl);
+    }
+
+}

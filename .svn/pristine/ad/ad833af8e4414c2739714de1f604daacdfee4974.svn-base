@@ -1,0 +1,60 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property integer $sale_receipt_header_id
+ * @property integer $invoice_id
+ * @property integer $is_inactive
+ *
+ * @property SaleReceiptHeader $saleReceiptHeader
+ * @property Invoice $invoice
+ */
+class SaleReceiptDetailBase extends ActiveRecord
+{
+	public function tableName()
+	{
+		return 'tbldl_sale_receipt_detail';
+	}
+
+	public function rules()
+	{
+		return array(
+			array('sale_receipt_header_id, invoice_id', 'required'),
+			array('sale_receipt_header_id, invoice_id, is_inactive', 'numerical', 'integerOnly'=>true),
+			// The following rule is used by search().
+			array('id, sale_receipt_header_id, invoice_id, is_inactive', 'safe', 'on'=>'search'),
+		);
+	}
+
+	public function relations()
+	{
+		return array(
+			'saleReceiptHeader' => array(self::BELONGS_TO, 'SaleReceiptHeader', 'sale_receipt_header_id'),
+			'invoice' => array(self::BELONGS_TO, 'Invoice', 'invoice_id'),
+		);
+	}
+
+	public function attributeLabels()
+	{
+		return array(
+			'id' => 'ID',
+			'sale_receipt_header_id' => 'Sale Receipt Header',
+			'invoice_id' => 'Invoice',
+			'is_inactive' => 'Is Inactive',
+		);
+	}
+
+	public function search()
+	{
+		$criteria = new CDbCriteria;
+
+		$criteria->compare('id', $this->id);
+		$criteria->compare('sale_receipt_header_id', $this->sale_receipt_header_id);
+		$criteria->compare('invoice_id', $this->invoice_id);
+		$criteria->compare('is_inactive', $this->is_inactive);
+
+		return new CActiveDataProvider($this, array(
+			'criteria'=>$criteria,
+		));
+	}
+}

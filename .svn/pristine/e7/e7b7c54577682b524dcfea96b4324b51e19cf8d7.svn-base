@@ -1,0 +1,141 @@
+<?php
+
+class SalePayment extends CComponent {
+
+    public $header;
+    public $details;
+
+    public function __construct($header, array $details) {
+        $this->header = $header;
+        $this->details = $details;
+    }
+
+    public function addInvoice($invoiceId) {
+
+        $exist = FALSE;
+        $invoiceHeader = InvoiceHeader::model()->findByPk($invoiceId);
+
+        if ($invoiceHeader != null) {
+            foreach ($this->details as $detail) {
+                if ($detail->invoice_header_id == $invoiceHeader->id) {
+                    $exist = TRUE;
+                    break;
+                }
+            }
+
+            if (!$exist) {
+                $detail = new SalePaymentDetail;
+                $detail->invoice_header_id = $invoiceId;
+                $detail->total_invoice = $invoiceHeader->remaining;
+                $this->details[] = $detail;
+            }
+        }
+    }
+
+    public function removeDetailAt($index) {
+        array_splice($this->details, $index, 1);
+    }
+
+    public function save($dbConnection) {
+        $dbTransaction = $dbConnection->beginTransaction();
+        try {
+            $valid = $this->validate() && $this->flush();
+            if ($valid)
+                $dbTransaction->commit();
+            else
+                $dbTransaction->rollback();
+        } catch (Exception $e) {
+            $dbTransaction->rollback();
+            $valid = false;
+        }
+
+        return $valid;
+    }
+
+    public function flush() {
+        $valid = $this->header->save(false);
+
+        foreach ($this->details as $detail) {
+            if ($detail->amount <= 0) {
+                continue;
+            }
+
+            if ($detail->isNewRecord) {
+                $detail->sale_payment_header_id = $this->header->id;
+            }
+
+            $valid = $detail->save(false) && $valid;
+
+            $invoice = $detail->invoiceHeader(array('scopes' => 'resetScope'));
+            $invoice->total_payment = $invoice->getTotalPayment();
+            $valid = $invoice->update(array('total_payment')) && $valid;
+
+        }
+
+        return $valid;
+    }
+
+    public function validate() {
+//        $this->header->branch_id = $this->header->invoiceHeader->branch_id;
+        $valid = $this->header->validate();
+
+//        $valid = $this->validatePayment() && $valid;
+        $valid = $this->validateDetailsCount() && $valid;
+
+        if (count($this->details) > 0) {
+            foreach ($this->details as $detail) {
+                $fields = array('amount', 'payment_type_id', 'memo');
+                $valid = $detail->validate($fields) && $valid;
+            }
+        } else {
+            $valid = false;
+        }
+
+        return $valid;
+    }
+
+    public function validatePayment() {
+        $valid = true;
+
+        if ($this->totalPayment > $this->remaining) {
+            $valid = false;
+            $this->header->addError('error', 'Nominal Pembayaran lebih besar dari total.');
+        }
+
+        return $valid;
+    }
+
+    public function validateDetailsCount() {
+        $valid = true;
+        if (count($this->details) === 0) {
+            $valid = false;
+            $this->header->addError('error', 'Form tidak ada data untuk insert database. Minimal satu data detail untuk melakukan penyimpanan.');
+        }
+
+        return $valid;
+    }
+
+    public function getTotalInvoice() {
+        $total = 0.00;
+
+        foreach ($this->details as $detail) {
+            $total += $detail->invoiceHeader->grand_total;
+        }
+
+        return $total;
+    }
+
+    public function getTotalPayment() {
+        $total = 0.00;
+
+        foreach ($this->details as $detail) {
+            $total += $detail->amount + $detail->additional_amount;
+        }
+
+        return $total;
+    }
+
+    public function getRemaining() {
+        return $this->totalInvoice - $this->totalPayment;
+    }
+}

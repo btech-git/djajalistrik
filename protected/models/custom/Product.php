@@ -1,0 +1,228 @@
+<?php
+
+class Product extends ProductBase {
+
+    public $quantity = 0;
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getStock($warehouseId = null) {
+        if ($warehouseId === null) {
+            $sql = "SELECT COALESCE(SUM(quantity_in) - SUM(quantity_out), 0) 
+                    FROM " . Inventory::model()->tableName() . " 
+                    WHERE product_id = :product_id
+                    GROUP BY product_id";
+            $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(':product_id' => $this->id));
+        } else {
+            $sql = "SELECT COALESCE(SUM(quantity_in) - SUM(quantity_out), 0) 
+                    FROM " . Inventory::model()->tableName() . " 
+                    WHERE product_id = :product_id AND warehouse_id = :warehouse_id
+                    GROUP BY product_id";
+            $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(':product_id' => $this->id, ':warehouse_id' => $warehouseId));
+        }
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getLocalStock($warehouseId) {
+//        $sql = SqlGenerator::localStock();
+        $sql = "SELECT p.product_id, SUM(quantity_in - quantity_out) AS current_stock
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.warehouse_id = :warehouse_id
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':warehouse_id' => $warehouseId,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getStockBeginning($startDate) {
+        $sql = SqlGenerator::stockBeginning();
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getStockEnding($endDate) {
+        $sql = SqlGenerator::stockEnding();
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getStockIn($startDate, $endDate) {
+        $sql = SqlGenerator::stockIn();
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getStockOut($startDate, $endDate) {
+        $sql = SqlGenerator::stockOut();
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getPurchaseStock() {
+        $sql = "SELECT COALESCE(SUM(quantity_remaining), 0) AS stock
+                FROM " . PurchaseDetail::model()->tableName() . "
+                WHERE product_id = :product_id
+                GROUP BY product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(':product_id' => $this->id));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getTotalStock() {
+        return $this->getPurchaseStock() + $this->getStock();
+    }
+
+    public function getTotalQuantitySales() {
+        $totalQuantitySales = 0.00;
+
+        foreach ($this->orderDetails as $orderDetail)
+            $totalQuantitySales += $orderDetail->quantity;
+
+        return $totalQuantitySales;
+    }
+
+    public function getTotalSales() {
+        $totalSales = 0.00;
+
+        foreach ($this->orderDetails as $orderDetail)
+            $totalSales += $orderDetail->total;
+
+        return $totalSales;
+    }
+
+    public function getCurrentStock($endDate) {
+        $sql = "SELECT SUM(quantity_in - quantity_out) AS current_stock
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.date <= :end_date
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getCogsBeginning($startDate) {
+        $sql = "SELECT COALESCE(SUM((quantity_in - quantity_out) * price), 0) AS current_price
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.date < :start_date
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getCogsIn($startDate, $endDate) {
+        $sql = "SELECT COALESCE(SUM(quantity_in * price), 0) AS current_price
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.date BETWEEN :start_date AND :end_date
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getCogsOut($startDate, $endDate) {
+        $sql = "SELECT COALESCE(SUM(quantity_out * price), 0) AS current_price
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.date BETWEEN :start_date AND :end_date
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':start_date' => $startDate,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function getCostOfGoodsSold($endDate) {
+        $sql = "SELECT COALESCE(SUM((quantity_in - quantity_out) * price), 0) AS current_price
+                FROM " . Inventory::model()->tableName() . " p
+                WHERE p.product_id = :product_id AND p.date <= :end_date
+                GROUP BY p.product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(
+            ':product_id' => $this->id,
+            ':end_date' => $endDate,
+        ));
+
+        return ($value === false) ? 0 : $value;
+    }
+
+    public function searchByMinimumStock() {
+        $criteria = new CDbCriteria;
+
+        $criteria->condition = "
+            EXISTS (
+                SELECT p.product_id, SUM(quantity_in - quantity_out) AS current_stock
+				FROM " . Inventory::model()->tableName() . " p
+                WHERE t.id = p.product_id
+                GROUP BY p.product_id
+                HAVING current_stock < t.quantity_minimum
+            )
+        ";
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('t.name', $this->name, true);
+        $criteria->compare('unit_id_single', $this->unit_id_single);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+    public function getMovingAveragePrice() {
+        $sql = "SELECT COALESCE(SUM(unit_price_after_discount * quantity) / SUM(quantity), 0) AS average_price
+                FROM " . PurchaseDetail::model()->tableName() . "
+                WHERE product_id = :product_id
+                GROUP BY product_id";
+
+        $value = CActiveRecord::$db->createCommand($sql)->queryScalar(array(':product_id' => $this->id));
+
+        return ($value === false) ? 0 : $value;
+        
+    }
+}

@@ -1,0 +1,331 @@
+<?php
+$this->breadcrumbs = array(
+    'Order' => array('/transaction/order/create'),
+    'View',
+);
+?>
+<h1><?php echo $this->id . '/' . $this->action->id; ?></h1>
+<div id="detail_div">
+    <?php $this->widget('zii.widgets.CDetailView', array(
+        'data' => $orderHeader,
+        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+        'attributes' => array(
+            array(
+                'label' => 'Pemesanan #',
+                'value' => $orderHeader->number,
+            ),
+            array(
+                'label' => 'Tanggal',
+                'value' => Yii::app()->dateFormatter->format("d MMMM yyyy", $orderHeader->date),
+            ),
+            array(
+                'label' => 'Cabang',
+                'value' => $branch->name,
+            ),
+            array(
+                'label' => 'Customer',
+                'value' => $customer->name,
+            ),
+            array(
+                'label' => 'Kategori Pelanggan',
+                'value' => $discountCategory->name,
+            ),
+            array(
+                'label' => 'PO #',
+                'value' => $orderHeader->reference_number,
+            ),
+            array(
+                'label' => 'PPN/Non',
+                'value' => $orderHeader->taxStatus,
+            ),
+            array(
+                'label' => 'Ex/Include',
+                'value' => ((int)$orderHeader->is_tax === 0) ? $orderHeader->taxValue : "",
+            ),
+            array(
+                'label' => 'Catatan Eksternal',
+                'value' => $orderHeader->note_external,
+            ),
+            array(
+                'label' => 'Catatan Internal',
+                'value' => $orderHeader->note_internal,
+            ),
+        ),
+    )); ?>
+
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'order-detail-grid',
+        'dataProvider' => $detailsDataProvider,
+        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+        'columns' => array(
+            'product_name: Nama Barang',
+            array(
+                'header' => 'Jumlah',
+                'value' => 'number_format($data->quantity_single, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            'unit.name: Satuan',
+            array(
+                'header' => 'Harga Satuan',
+                'value' => 'number_format($data->unit_price_single, 2)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 1',
+                'value' => 'number_format($data->discount_1, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 2',
+                'value' => 'number_format($data->discount_2, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 3',
+                'value' => 'number_format($data->discount_3, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 4',
+                'value' => 'number_format($data->discount_4, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 5',
+                'value' => 'number_format($data->discount_5, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => 'Total',
+                'value' => 'number_format($data->total, 2)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+        ),
+    )); ?>
+    
+    <table>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Total Stok:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->totalDetail)); ?>
+            </td>
+            <td></td>
+        </tr>
+    </table>
+    
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'order-detail-grid',
+        'dataProvider' => $newProductsDataProvider,
+        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+        'columns' => array(
+            'name: Nama Barang',
+            array(
+                'header' => 'Jumlah',
+                'value' => 'number_format($data->quantity, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            'unit.name: Satuan',
+            array(
+                'header' => 'Harga Satuan',
+                'value' => 'number_format($data->unit_price, 2)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 1',
+                'value' => 'number_format($data->discount_1, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 2',
+                'value' => 'number_format($data->discount_2, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 3',
+                'value' => 'number_format($data->discount_3, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 4',
+                'value' => 'number_format($data->discount_4, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => '+/-(%) 5',
+                'value' => 'number_format($data->discount_5, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'header' => 'Total',
+                'value' => 'number_format($data->total, 2)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+        ),
+    )); ?>
+    
+    <table>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Total Non-stok:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->totalNewProduct)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Sub Total:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->subTotal)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">PPN 11%:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->totalTax)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Deposit:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->deposit)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Ongkos Kirim:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->shipping_fee)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+        <tr style="background-color: #F5DEB3">
+            <td width="85%" style="text-align: right;font-weight: bold;">Grand Total:</td>
+            <td style="text-align: right;font-weight: bold;">
+                <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $orderHeader->grandTotal)); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+    </table>
+    
+    <div id="link">
+        <?php echo CHtml::link('Create', array('create')); ?>
+        <?php echo CHtml::link('Update', array('update', 'id' => $orderHeader->id)); ?>
+        
+        <?php if ((int) $orderHeader->is_approved === 1): ?>
+            <?php echo CHtml::link('Print SO', array('memoOrder', 'id' => $orderHeader->id), array('target' => '_blank')); ?>
+            <?php echo CHtml::link('Print Invoice', array('memo', 'id' => $orderHeader->id), array('target' => '_blank')); ?>
+        <?php endif; ?><br /><br /><br />
+        
+        <?php echo CHtml::beginForm(); ?>
+        <?php if (Yii::app()->user->checkAccess('administrator')): ?>
+            <?php if ((int) $orderHeader->is_approved === 0): ?>
+                <?php echo CHtml::submitButton('APPROVED', array('name' => 'Update', 'style' => 'background-color: lightgreen')); ?>
+            <?php elseif ((int) $orderHeader->is_approved === 1): ?>
+                <?php if ((int) $orderHeader->is_hold === 0): ?>
+                    <?php echo CHtml::submitButton('HOLD', array('name' => 'Hold', 'style' => 'background-color: red; font-weight: bold')); ?>
+                    <?php echo CHtml::submitButton('CLEARED', array('name' => 'Cleared', 'style' => 'background-color: lightgreen; font-weight: bold')); ?>
+                    <?php echo CHtml::submitButton('CANCELED', array('name' => 'Canceled', 'style' => 'background-color: yellow; font-weight: bold')); ?>
+                <?php endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
+        <?php echo CHtml::endForm(); ?>
+    </div>
+</div>
+
+<br /><br />
+
+<div>
+    <table>
+        <thead>
+            <tr>
+                <th>Pengiriman #</th>
+                <th>Tanggal</th>
+                <th>Warehouse</th>
+                <th>Note Eksternal</th>
+                <th>Note Internal</th>
+                <th>Admin</th>
+            </tr>
+        </thead>
+        
+        <tbody>
+            <?php foreach ($orderHeader->deliveryHeaders as $deliveryHeader): ?>
+            <tr>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'number')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'date')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'warehouse.name')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'note')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'note_internal')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($deliveryHeader, 'admin.username')); ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+
+<br /><br />
+
+<div>
+    <table>
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Tanggal</th>
+                <th>Note</th>
+                <th>Grand Total</th>
+                <th>Payment</th>
+                <th>Remaining</th>
+                <th>Admin</th>
+            </tr>
+        </thead>
+        
+        <tbody>
+            <?php foreach ($orderHeader->invoiceHeaders as $invoiceHeader): ?>
+            <tr>
+                <td><?php echo CHtml::encode(CHtml::value($invoiceHeader, 'number')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($invoiceHeader, 'date')); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($invoiceHeader, 'note')); ?></td>
+                <td><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($invoiceHeader, 'grand_total'))); ?></td>
+                <td><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($invoiceHeader, 'total_payment'))); ?></td>
+                <td><?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($invoiceHeader, 'remaining'))); ?></td>
+                <td><?php echo CHtml::encode(CHtml::value($invoiceHeader, 'admin.username')); ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>

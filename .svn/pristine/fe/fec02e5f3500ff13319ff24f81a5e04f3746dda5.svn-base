@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property integer $quantity
+ * @property string $unit_price
+ * @property string $discount_1
+ * @property string $discount_2
+ * @property string $discount_3
+ * @property string $discount_4
+ * @property string $discount_5
+ * @property integer $invoice_header_id
+ * @property integer $delivery_detail_id
+ * @property integer $is_inactive
+ * @property string $unit_price_after_discount
+ *
+ * @property InvoiceHeader $invoiceHeader
+ * @property DeliveryDetail $deliveryDetail
+ */
+class InvoiceDetailBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_invoice_detail';
+    }
+
+    public function rules() {
+        return array(
+            array('invoice_header_id, delivery_detail_id', 'required'),
+            array('quantity, invoice_header_id, delivery_detail_id, is_inactive', 'numerical', 'integerOnly' => true),
+            array('unit_price, unit_price_after_discount', 'length', 'max' => 18),
+            array('discount_1, discount_2, discount_3, discount_4, discount_5', 'length', 'max' => 10),
+            // The following rule is used by search().
+            array('id, quantity, unit_price, discount_1, discount_2, discount_3, discount_4, discount_5, invoice_header_id, delivery_detail_id, is_inactive, unit_price_after_discount', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'invoiceHeader' => array(self::BELONGS_TO, 'InvoiceHeader', 'invoice_header_id'),
+            'deliveryDetail' => array(self::BELONGS_TO, 'DeliveryDetail', 'delivery_detail_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'quantity' => 'Quantity',
+            'unit_price' => 'Unit Price',
+            'discount_1' => 'Discount 1',
+            'discount_2' => 'Discount 2',
+            'discount_3' => 'Discount 3',
+            'discount_4' => 'Discount 4',
+            'discount_5' => 'Discount 5',
+            'invoice_header_id' => 'Invoice Header',
+            'delivery_detail_id' => 'Delivery Detail',
+            'is_inactive' => 'Is Inactive',
+            'unit_price_after_discount' => 'Unit Price After Discount',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('quantity', $this->quantity);
+        $criteria->compare('unit_price', $this->unit_price, true);
+        $criteria->compare('discount_1', $this->discount_1, true);
+        $criteria->compare('discount_2', $this->discount_2, true);
+        $criteria->compare('discount_3', $this->discount_3, true);
+        $criteria->compare('discount_4', $this->discount_4, true);
+        $criteria->compare('discount_5', $this->discount_5, true);
+        $criteria->compare('invoice_header_id', $this->invoice_header_id);
+        $criteria->compare('delivery_detail_id', $this->delivery_detail_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('unit_price_after_discount', $this->unit_price_after_discount, true);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+
+}

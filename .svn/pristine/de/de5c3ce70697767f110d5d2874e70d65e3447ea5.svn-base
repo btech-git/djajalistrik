@@ -1,0 +1,32 @@
+<?php
+
+class PackingListHeader extends PackingListHeaderBase
+{
+	public static function model($className = __CLASS__)
+	{
+		return parent::model($className);
+	}
+    
+//    public function searchByDelivery() {
+//        $criteria = new CDbCriteria;
+//
+//        $criteria->condition = "t.id NOT IN (
+//                SELECT packing_list_header_id 
+//                FROM " . DeliveryHeader::model()->tableName() . " 
+//                WHERE is_inactive = 0
+//            )
+//        ";
+//
+//		$criteria->compare('id', $this->id);
+//		$criteria->compare('number', $this->number, true);
+//		$criteria->compare('date', $this->date, true);
+//		$criteria->compare('warehouse_id', $this->warehouse_id);
+//		$criteria->compare('admin_id', $this->admin_id);
+//		$criteria->compare('branch_id', $this->branch_id);
+//		$criteria->compare('order_header_id', $this->order_header_id);
+//
+//        return new CActiveDataProvider($this, array(
+//            'criteria' => $criteria,
+//        ));
+//    }
+}

@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property string $number
+ * @property string $date
+ * @property string $note
+ * @property integer $branch_id
+ * @property integer $admin_id
+ * @property integer $is_inactive
+ * @property integer $invoice_header_id
+ * @property integer $customer_id
+ *
+ * @property SalePaymentDetail[] $salePaymentDetails
+ * @property InvoiceHeader $invoiceHeader
+ * @property Branch $branch
+ * @property Admin $admin
+ * @property Customer $customer
+ */
+class SalePaymentHeaderBase extends ActiveRecord {
+
+    public function tableName() {
+        return 'tbldl_sale_payment_header';
+    }
+
+    public function rules() {
+        return array(
+            array('number, date, branch_id, admin_id, customer_id', 'required'),
+            array('branch_id, admin_id, is_inactive, invoice_header_id, customer_id', 'numerical', 'integerOnly' => true),
+            array('number', 'length', 'max' => 60),
+            array('note', 'safe'),
+            // The following rule is used by search().
+            array('id, number, date, note, branch_id, admin_id, is_inactive, invoice_header_id, customer_id', 'safe', 'on' => 'search'),
+        );
+    }
+
+    public function relations() {
+        return array(
+            'salePaymentDetails' => array(self::HAS_MANY, 'SalePaymentDetail', 'sale_payment_header_id'),
+            'invoiceHeader' => array(self::BELONGS_TO, 'InvoiceHeader', 'invoice_header_id'),
+            'branch' => array(self::BELONGS_TO, 'Branch', 'branch_id'),
+            'admin' => array(self::BELONGS_TO, 'Admin', 'admin_id'),
+            'customer' => array(self::BELONGS_TO, 'Customer', 'customer_id'),
+        );
+    }
+
+    public function attributeLabels() {
+        return array(
+            'id' => 'ID',
+            'number' => 'Number',
+            'date' => 'Date',
+            'note' => 'Note',
+            'branch_id' => 'Branch',
+            'admin_id' => 'Admin',
+            'is_inactive' => 'Is Inactive',
+            'invoice_header_id' => 'Invoice Header',
+            'customer_id' => 'Customer',
+        );
+    }
+
+    public function search() {
+        $criteria = new CDbCriteria;
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('number', $this->number, true);
+        $criteria->compare('date', $this->date, true);
+        $criteria->compare('note', $this->note, true);
+        $criteria->compare('branch_id', $this->branch_id);
+        $criteria->compare('admin_id', $this->admin_id);
+        $criteria->compare('is_inactive', $this->is_inactive);
+        $criteria->compare('invoice_header_id', $this->invoice_header_id);
+        $criteria->compare('customer_id', $this->customer_id);
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+        ));
+    }
+}

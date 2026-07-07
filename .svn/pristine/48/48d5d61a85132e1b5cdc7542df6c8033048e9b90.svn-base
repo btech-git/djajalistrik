@@ -1,0 +1,105 @@
+<?php
+CHtml::refresh(300);
+
+$this->breadcrumbs = array(
+    'Invoice' => array('create'),
+    'Manage',
+);
+
+Yii::app()->clientScript->registerScript('report', '
+    $("#InvoiceHeaderDate").val("' . $invoiceHeaderDate . '");
+    $("#PageSize").val("' . $dataProvider->pagination->pageSize . '");
+    $("#CurrentPage").val("' . ($dataProvider->pagination->getCurrentPage(false) + 1) . '");
+');
+//Yii::app()->clientScript->registerScript('admin', "
+//    $('form').submit(function(){
+//        $.fn.yiiGridView.update('order-grid', {
+//            data: $(this).serialize()
+//        });
+//        return false;
+//    });
+//");
+?>
+
+<h1>Data Outstanding Invoice</h1>
+<div id="detail_div">
+    <?php echo CHtml::beginForm(array(''), 'get'); ?>
+    <p>
+        You may optionally enter a comparison operator (<b>&lt;</b>, <b>&lt;=</b>, <b>&gt;</b>, <b>&gt;=</b>, <b>&lt;&gt;</b>
+        or <b>=</b>) at the beginning of each of your search values to specify how the comparison should be done.
+    </p>
+
+    <div id="link">
+        <?php echo CHtml::hiddenField('page', '', array('size' => 3, 'id' => 'CurrentPage')); ?>
+        <?php echo CHtml::link('Manage', array('admin'), array('target' => '_blank', 'style' => 'float: right')); ?>
+    </div>
+
+    <br /><br />
+
+    <div>
+        <fieldset>
+            <legend>Search</legend>
+            <table style="border: 1px solid">
+                <tr>
+                    <td>Tanggal</td>
+                    <td>
+                        <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+                            'name' => 'InvoiceHeaderDate',
+                            'options' => array(
+                                'dateFormat' => 'yy-mm-dd',
+                                'changeMonth'=>true,
+                                'changeYear'=>true,
+                            ),
+                            'htmlOptions' => array(
+                                'readonly' => true,
+                                'placeholder' => 'Tanggal Invoice',
+                            ),
+                        )); ?>
+                    </td>
+                    <td>Invoice #</td>
+                    <td><?php echo CHtml::activeTextField($invoice, 'number'); ?></td>
+                </tr>
+                <tr>
+                    <td>Customer</td>
+                    <td><?php echo CHtml::activeDropDownList($invoice, 'customer_id', CHtml::listData(Customer::model()->findAll(array('order' => 'company ASC')), 'id', 'company'), array('empty' => '-- All --')); ?></td>
+                    <td>Customer PO #</td>
+                    <td><?php echo CHtml::textField('OrderNumber', $orderNumber, array('maxLength' => '60')); ?></td>
+                </tr>
+            </table>
+        </fieldset>
+    </div>
+    
+    <div class="clear"></div>
+
+    <div class="row buttons">
+        <?php echo CHtml::submitButton('Tampilkan', array('onclick' => '$("#CurrentSort").val(""); return true;')); ?>
+        <?php echo CHtml::submitButton('Hapus', array('name' => 'ResetFilter'));  ?>
+        <?php echo CHtml::submitButton('Simpan ke Excel', array('name' => 'SaveExcel', 'style' => 'background-color: #04AA6D; border: none; color:white; height: 30px')); ?>
+    </div>
+
+    <?php echo CHtml::endForm(); ?>
+
+    <br />
+
+    <div class="right"><?php echo ReportHelper::summaryText($dataProvider); ?></div>
+    <div class="clear"></div>
+
+    <br />
+
+    <div style="overflow: auto">
+        <?php $this->renderPartial('_outstanding', array(
+            'dataProvider' => $dataProvider,
+        )); ?>
+    </div>
+
+    <div>
+        <div class="right">
+            <?php $this->widget('system.web.widgets.pagers.CLinkPager', array(
+                'itemCount' => $dataProvider->pagination->itemCount,
+                'pageSize' => $dataProvider->pagination->pageSize,
+                'currentPage' => $dataProvider->pagination->getCurrentPage(false),
+            )); ?>
+        </div>
+        <div class="clear"></div>
+    </div>
+</div>

@@ -1,0 +1,418 @@
+<div class="form">
+    <?php echo CHtml::beginForm(); ?>
+    <?php echo CHtml::errorSummary($order->header); ?>
+    
+    <div class="container">
+        <div class="span-11">
+            <div class="row">
+                <?php echo CHtml::label('Tanggal', false); ?>
+                <?php $this->widget('zii.widgets.jui.CJuiDatePicker', array(
+                    'model' => $order->header,
+                    'attribute' => 'date',
+                    // additional javascript options for the date picker plugin
+                    'options' => array(
+                        'dateFormat' => 'yy-mm-dd',
+                    ),
+                    'htmlOptions' => array(
+                        'readonly' => true,
+                    ),
+                )); ?>
+                <?php echo CHtml::error($order->header, 'date'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('No. PO Customer', ''); ?>
+                <?php echo CHtml::activeTextField($order->header, 'reference_number'); ?>
+                <?php echo CHtml::error($order->header, 'reference_number'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Catatan Eksternal', ''); ?>
+                <?php echo CHtml::activeTextArea($order->header, 'note_external', array('cols' => '30', 'rows' => '5')); ?>
+                <?php echo CHtml::error($order->header, 'note_external'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Catatan Internal', ''); ?>
+                <?php echo CHtml::activeTextArea($order->header, 'note_internal', array('cols' => '30', 'rows' => '5')); ?>
+                <?php echo CHtml::error($order->header, 'note_internal'); ?>
+            </div>
+        </div>
+
+        <div class="span-11 last">
+            <div class="row">
+                <?php echo CHtml::label('PPN / non-PPN', false); ?>
+                <?php echo CHtml::activeDropDownList($order->header, 'is_tax', array(
+                    OrderHeader::TAX => OrderHeader::TAX_LITERAL, 
+                    OrderHeader::NON_TAX => OrderHeader::NON_TAX_LITERAL
+                ), array(
+                    'onchange' => 'hide();hideTaxRow();' . CHtml::ajax(array(
+                        'type' => 'POST',
+                        'dataType' => "JSON",
+                        'url' => CController::createUrl('ajaxJsonGrandTotal', array('id' => $order->header->id)),
+                        'success' => 'function(data) {
+                            $("#tax").html(data.tax);
+                            $("#grand_total").html(data.grandTotal);
+                        }',
+                    )),
+                )); ?>
+                <?php echo CHtml::error($order->header, 'is_tax'); ?>
+            </div>
+
+            <div class="row" id="includeRow">
+                <?php echo CHtml::label('Include', false); ?>
+                <span id ="include">
+                    <?php echo CHtml::activeDropDownList($order->header, 'is_include', array(
+                        OrderHeader::INCLUDE_TAX => OrderHeader::INCLUDE_TAX_LITERAL, 
+                        OrderHeader::NON_INCLUDE => OrderHeader::NON_INCLUDE_LITERAL
+                    ), array(
+                        'empty' => '-- Pilih In/Exclude --',
+                        'onchange' => CHtml::ajax(array(
+                            'type' => 'POST',
+                            'dataType' => 'JSON',
+                            'url' => CController::createUrl('ajaxJsonGrandTotal', array('id' => $order->header->id)),
+                            'success' => 'function(data) {
+                                $("#tax").html(data.tax);
+                                $("#grand_total").html(data.grandTotal);
+                            }',
+                        )),
+                    )); ?>
+                </span>
+                <?php echo CHtml::error($order->header, 'is_include'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::activeLabelEx($order->header, 'Cabang'); ?>
+                <?php echo CHtml::activeDropDownList($order->header, 'branch_id', CHtml::listData(Branch::model()->active()->findAll(), 'id', 'name'), array('empty' => '-- Pilih Branch --')) ?>
+                <?php echo CHtml::error($order->header, 'branch_id'); ?>
+            </div>
+
+            <?php //if ($order->header->isNewRecord): ?>
+                <div class="row">
+                    <?php echo CHtml::label('Customer', ''); ?>
+                    <?php echo CHtml::activeTextField($order->header, 'customer_id', array('readonly' => true, 'onclick' => '$("#customer-dialog").dialog("open"); return false;', 'onkeypress' => 'if (event.keyCode == 13) { $("#customer-dialog").dialog("open"); return false; }')); ?>
+                    <?php echo CHtml::error($order->header, 'customer_id'); ?>
+
+                    <?php $this->beginWidget('zii.widgets.jui.CJuiDialog', array(
+                        'id' => 'customer-dialog',
+                        // additional javascript options for the dialog plugin
+                        'options' => array(
+                            'title' => 'Customer',
+                            'autoOpen' => false,
+                            'width' => 'auto',
+                            'modal' => true,
+                        ),
+                    )); ?>
+
+                    <?php $this->widget('zii.widgets.grid.CGridView', array(
+                        'id' => 'customer-grid',
+                        'dataProvider' => $customer->search(),
+                        'filter' => $customer,
+                        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+                        'pager' => array('cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css'),
+                        'selectionChanged' => 'js:function(id) {
+                            $("#' . CHtml::activeId($order->header, 'customer_id') . '").val($.fn.yiiGridView.getSelection(id));
+                            $("#customer-dialog").dialog("close");
+                            if ($.fn.yiiGridView.getSelection(id) == "") {
+                                $("#customer_id").html("");
+                                $("#customer_name").html("");
+                                $("#customer_company").html("");
+                                $("#customer_address_1").html("");
+                                $("#customer_city").html("");
+                                $("#customer_credit_limit").html("");
+                                $("#customer_discount_category").html("");
+                                $("#customer_salesman").html("");
+                            } else {
+                                $.ajax({
+                                    type: "POST",
+                                    dataType: "JSON",
+                                    url: "' . CController::createUrl('ajaxJsonCustomer', array('id' => $order->header->id)) . '",
+                                    data: $("form").serialize(),
+                                    success: function(data) {
+                                        $("#customer_id").html(data.customer_id);
+                                        $("#customer_name").html(data.customer_name);
+                                        $("#customer_company").html(data.customer_company);
+                                        $("#customer_address_1").html(data.customer_address_1);
+                                        $("#customer_city").html(data.customer_city);
+                                        $("#customer_credit_limit").html(data.customer_credit_limit);
+                                        $("#customer_discount_category").html(data.customer_discount_category);
+                                        $("#customer_salesman").html(data.customer_salesman);
+                                    },
+                                });
+                            }
+                            $.ajax({
+                                type: "POST",
+                                url: "' . CController::createUrl('ajaxHtmlUpdateAllDiscountTax', array('id' => $order->header->id)) . '",
+                                data: $("form").serialize(),
+                                success: function(html) { $("#detail_div").html(html); },
+                            });
+                        }',
+                        'columns' => array(
+                            'name',
+                            'company',
+                            'address_1',
+                            'city',
+                            array(
+                                'name' => 'credit_limit',
+                                'value' => 'number_format($data->remainingCreditLimit, 2)',
+                                'htmlOptions' => array(
+                                    'style' => 'text-align: right',
+                                ),
+                            ),
+                        ),
+                    )); ?>
+                    <?php $this->endWidget('zii.widgets.jui.CJuiDialog'); ?>
+                </div>
+            <?php //endif; ?>
+
+            <?php $orderCustomer = $order->header->customer(array('scopes' => 'resetScope', 'with' => 'discountCategory:resetScope')); ?>
+
+            <div class="row">
+                <?php echo CHtml::label('Nama Customer', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'customer_name')); ?>
+                <?php echo CHtml::encode(CHtml::value($orderCustomer, 'name')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Alamat', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'customer_address_1')); ?>
+                <?php echo CHtml::encode(CHtml::value($orderCustomer, 'address_1')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Kota', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'customer_city')); ?>
+                <?php echo CHtml::encode(CHtml::value($orderCustomer, 'city')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Kategori Pelanggan', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'customer_discount_category')); ?>
+                <?php echo CHtml::encode(CHtml::value($orderCustomer, 'discountCategory.name')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>
+
+            <div class="row">
+                <?php echo CHtml::label('Salesman', ''); ?>
+                <?php echo CHtml::openTag('span', array('id' => 'customer_salesman')); ?>
+                <?php echo CHtml::encode(CHtml::value($orderCustomer, 'salesman.name')); ?>
+                <?php echo CHtml::closeTag('span'); ?>
+            </div>				
+        </div>
+    </div>
+
+    <hr />
+    <div class="row">
+        <?php echo CHtml::button('Cari Barang', array('name' => 'Search', 'onclick' => '$("#product-dialog").dialog("open"); return false;', 'onkeypress' => 'if (event.keyCode == 13) { $("#product-dialog").dialog("open"); return false; }')); ?>
+        <?php echo CHtml::hiddenField('ProductId'); ?>
+        <?php echo CHtml::button('Tambah Detail Kosong', array('name' => 'EmptyDetailAdd',
+            'onclick' => CHtml::ajax(array(
+                'type' => 'POST',
+                'url' => CController::createUrl('ajaxHtmlAddEmptyDetail', array('id' => $order->header->id)),
+                'update' => '#new_product_div',
+            )),
+        )); ?>
+    </div>
+
+    <div class="row">
+        <?php echo CHtml::error($order->header, 'error'); ?>
+    </div>
+
+    <div id="detail_div">
+        <?php $this->renderPartial('_detail', array('order' => $order, 'error' => $error)); ?>
+    </div>
+    <div id="new_product_div">
+        <?php $this->renderPartial('_newProduct', array('order' => $order, 'error' => $error)); ?>
+    </div>
+
+    <table style="border: 1px solid; width: 950px">
+        <tr style="background-color: #F5DEB3">
+            <td colspan="3" style="text-align: right; font-weight: bold">Sub Total:</td>
+            <td style="text-align: right; font-weight: bold">
+                <span id="tax">
+                    <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $order->getSubTotal())); ?>
+                </span>
+            </td>
+            <td></td>
+        </tr>
+
+        <tr id="taxRow" style="background-color: #F5DEB3">
+            <td colspan="3" style="text-align: right; font-weight: bold">
+                PPN <?php echo CHtml::activeDropDownList($order->header, 'tax', array(
+                    11 => '11',
+                    12 => '12',
+                )); ?>%:
+            </td>
+            <td style="text-align: right; font-weight: bold">
+                <span id="tax">
+                    <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', $order->getTotalTax())); ?>
+                </span>
+            </td>
+            <td></td>
+        </tr>
+
+        <tr style="background-color: #F5DEB3">
+            <td colspan="3" style="text-align: right; font-weight: bold">Deposit:</td>
+            <td style="text-align: right">
+                <?php echo CHtml::activeTextField($order->header, 'deposit', array(
+                    'size' => 10, 
+                    'maxLength' => 20,
+                    'onchange' => CHtml::ajax(array(
+                        'type' => 'POST',
+                        'dataType' => 'JSON',
+                        'url' => CController::createUrl('ajaxJsonGrandTotal', array('id' => $order->header->id)),
+                        'success' => 'function(data) {
+                            $("#grand_total").html(data.grandTotal);
+                        }',
+                    )),
+                )); ?>
+                <?php echo CHtml::error($order->header, 'deposit'); ?>
+            </td>
+            <td></td>
+        </tr>
+        <tr style="background-color: #F5DEB3">
+            <td colspan="3" style="text-align: right; font-weight: bold">Ongkos Kirim:</td>
+            <td style="text-align: right">
+                <?php echo CHtml::activeTextField($order->header, 'shipping_fee', array(
+                    'size' => 10, 
+                    'maxLength' => 20,
+                    'onchange' => CHtml::ajax(array(
+                        'type' => 'POST',
+                        'dataType' => 'JSON',
+                        'url' => CController::createUrl('ajaxJsonGrandTotal', array('id' => $order->header->id)),
+                        'success' => 'function(data) {
+                            $("#grand_total").html(data.grandTotal);
+                        }',
+                    )),
+                )); ?>
+                <?php echo CHtml::error($order->header, 'shipping_fee'); ?>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+        
+        <tr style="background-color: #F5DEB3">
+            <td style="text-align: right"><?php if (!empty($order->header) && $order->header->isNewRecord): ?>Credit Limit:<?php endif; ?></td>
+            <td style="text-align: right; font-weight: bold">
+                <?php if (!empty($order->header) && $order->header->isNewRecord): ?>
+                    <span>
+                        <?php echo CHtml::openTag('span', array('id' => 'customer_credit_limit')); ?>
+                        <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order->header, 'customer.remainingCreditLimit'))); ?>
+                        <?php echo CHtml::closeTag('span'); ?>
+                    </span>
+                <?php endif; ?>	
+            </td>
+            <td style="text-align: right; font-weight: bold">Grand Total:</td>
+            <td style="text-align: right; font-weight: bold">
+                <span id="grand_total">
+                    <?php echo CHtml::encode(Yii::app()->numberFormatter->format('#,##0.00', round($order->getGrandTotal(), -1))); ?>
+                </span>
+            </td>
+            <td>&nbsp;</td>
+        </tr>
+    </table>
+
+    <div class="row buttons">
+        <?php echo CHtml::submitButton('Submit', array('name' => 'Submit', 'confirm' => 'Are you sure you want to save?')); ?>
+        <?php echo CHtml::submitButton('Cancel', array('name' => 'Cancel', 'confirm' => 'Are you sure you want to cancel?')); ?>
+    </div>
+
+    <?php echo CHtml::endForm(); ?>
+
+</div><!-- form -->
+
+<div>
+    <?php $this->beginWidget('zii.widgets.jui.CJuiDialog', array(
+        'id' => 'product-dialog',
+        // additional javascript options for the dialog plugin
+        'options' => array(
+            'title' => 'Products',
+            'autoOpen' => false,
+            'width' => 'auto',
+            'modal' => true,
+        ),
+    )); ?>
+
+    <?php $this->widget('zii.widgets.grid.CGridView', array(
+        'id' => 'product-grid',
+        'dataProvider' => $dataProvider,
+        'filter' => $product,
+        'cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css',
+        'pager' => array('cssFile' => Yii::app()->baseUrl . '/css/transaction/styles.css'),
+        'selectionChanged' => 'js:function(id) {
+            $("#ProductId").val($.fn.yiiGridView.getSelection(id));
+            $("#product-dialog").dialog("close");
+            $.ajax({
+                type: "POST",
+                url: "' . CController::createUrl('ajaxHtmlAddProduct', array('id' => $order->header->id)) . '",
+                data: $("form").serialize(),
+                success: function(html) { $("#detail_div").html(html); },
+            });
+        }',
+        'columns' => array(
+            'code',
+            'name',
+            array(
+                'name' => 'selling_price',
+                'value' => 'number_format($data->selling_price, 2)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'name' => 'quantity_bulk',
+                'header' => 'Quantity',
+                'value' => 'number_format($data->quantity_bulk, 0)',
+                'htmlOptions' => array(
+                    'style' => 'text-align: right',
+                ),
+            ),
+            array(
+                'name' => 'product_category_id_single',
+                'header' => 'Category',
+                'filter' => CHtml::dropDownList('ProductCategoryMainId', $productCategoryMainId, CHtml::listData(ProductCategoryMain::model()->findAll(array('order' => 'name ASC')), 'id', 'name'), array('empty' => '')),
+                'value' => '($data->productCategoryIdSingle === null) ? "N/A" : ($data->productCategoryIdSingle->productCategoryMain === null) ? "N/A" : $data->productCategoryIdSingle->productCategoryMain->name',
+            ),
+            array(
+                'name' => 'unit_id_single',
+                'header' => 'Satuan',
+                'filter' => CHtml::listData(Unit::model()->findAll(array('order' => 'name ASC')), 'id', 'name'),
+                'value' => '($data->unitIdSingle === null) ? "" : $data->unitIdSingle->name',
+            ),
+        ),
+    )); ?>
+
+    <?php $this->endWidget('zii.widgets.jui.CJuiDialog'); ?>
+</div>
+
+<script>
+    function hide()
+    {
+        var tax = document.getElementById("OrderHeader_is_tax"),
+                include = document.getElementById("includeRow");
+
+        if (tax.value == 0)
+        {
+            include.style.visibility = "visible";
+        } else
+        {
+            include.style.visibility = "hidden";
+        }
+    }
+
+    function hideTaxRow()
+    {
+        var tax = document.getElementById("OrderHeader_is_tax"),
+                row = document.getElementById("taxRow");
+
+        if (tax.value == 0)
+        {
+            row.style.display = "";
+        } else
+        {
+            row.style.display = "none";
+        }
+    }
+</script>

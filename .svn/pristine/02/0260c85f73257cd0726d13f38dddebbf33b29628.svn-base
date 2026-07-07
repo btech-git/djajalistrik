@@ -1,0 +1,748 @@
+<?php
+
+class OrderController extends Controller {
+
+    public function filters() {
+        return array(
+            'access',
+        );
+    }
+
+    public function filterAccess($filterChain) {
+        if ($filterChain->action->id === 'admin' || $filterChain->action->id === 'view' || $filterChain->action->id === 'memo' || $filterChain->action->id === 'ajaxJsonCustomer' || $filterChain->action->id === 'ajaxJsonTotal' || $filterChain->action->id === 'ajaxJsonGrandTotal' || $filterChain->action->id === 'updateAllDiscount') {
+            if (!(Yii::app()->user->checkAccess('orderCreate') || Yii::app()->user->checkAccess('orderEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'create' || $filterChain->action->id === 'ajaxHtmlAddProduct' || $filterChain->action->id === 'ajaxHtmlRemoveDetail') {
+            if (!(Yii::app()->user->checkAccess('orderCreate')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'delete' || $filterChain->action->id === 'update') {
+            if (!(Yii::app()->user->checkAccess('orderEdit')))
+                $this->redirect(array('/site/login'));
+        }
+        if ($filterChain->action->id === 'report') {
+            if (!(Yii::app()->user->checkAccess('orderReport')))
+                $this->redirect(array('/site/login'));
+        }
+
+        $filterChain->run();
+    }
+
+    public function actionCreate() {
+        $order = $this->instantiate(null);
+        $order->header->admin_id = Yii::app()->user->id;
+
+        $productCategoryMainId = isset($_GET['ProductCategoryMainId']) ? $_GET['ProductCategoryMainId'] : '';
+        $product = Search::bind(new Product('search'), isset($_GET['Product']) ? $_GET['Product'] : array());
+        $dataProvider = $product->search();
+        $dataProvider->criteria->with = array(
+            'productCategoryIdSingle:resetScope' => array(
+                'with' => array(
+                    'productCategoryMain:resetScope'
+                ),
+            ),
+        );
+        $dataProvider->criteria->compare('productCategoryMain.id', $productCategoryMainId);
+        $dataProvider->criteria->order = 't.name ASC';
+
+        $customer = Search::bind(new Customer('search'), isset($_GET['Customer']) ? $_GET['Customer'] : array());
+
+        $error = false;
+        if (isset($_POST['Submit'])) {
+            $this->loadState($order);
+            $order->header->number = CodeNumber::make($order->header, 'number', 'SO', $order->header->branch_id);
+            
+            if ($order->save(Yii::app()->db)) {
+                Yii::app()->session['OrderMemoAllowed'] = true;
+                $this->redirect(array('view', 'id' => $order->header->id));
+            }
+            else
+                $error = true;
+        }
+
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+
+        $this->render('create', array(
+            'order' => $order,
+            'dataProvider' => $dataProvider,
+            'productCategoryMainId' => $productCategoryMainId,
+            'product' => $product,
+            'customer' => $customer,
+            'error' => $error,
+        ));
+    }
+
+    public function actionUpdate($id) {
+        $order = $this->instantiate($id);
+        $order->header->admin_id = Yii::app()->user->id;
+
+        $productCategoryMainId = isset($_GET['ProductCategoryMainId']) ? $_GET['ProductCategoryMainId'] : '';
+        $product = Search::bind(new Product('search'), isset($_GET['Product']) ? $_GET['Product'] : array());
+        $dataProvider = $product->search();
+        $dataProvider->criteria->with = array(
+            'productCategoryIdSingle:resetScope' => array(
+                'with' => array('productCategoryMain:resetScope'),
+            ),
+        );
+        $dataProvider->criteria->compare('productCategoryMain.id', $productCategoryMainId);
+
+        $customer = Search::bind(new Customer('search'), isset($_GET['Customer']) ? $_GET['Customer'] : array());
+
+        $error = false;
+
+        if (isset($_POST['Submit'])) {
+            $this->loadState($order);
+            if ($order->save(Yii::app()->db))
+                $this->redirect(array('view', 'id' => $order->header->id));
+            else
+                $error = true;
+        }
+
+        if (isset($_POST['Cancel'])) {
+            $this->redirect(array('admin'));
+        }
+
+        $this->render('update', array(
+            'order' => $order,
+            'dataProvider' => $dataProvider,
+            'product' => $product,
+            'productCategoryMainId' => $productCategoryMainId,
+            'customer' => $customer,
+            'error' => $error,
+        ));
+    }
+
+    public function actionView($id) {
+        $orderHeader = $this->loadModel($id);
+
+        $customer = $orderHeader->customer(array('scopes' => 'resetScope'));
+        $discountCategory = $orderHeader->customer(array('scopes' => 'resetScope'))->discountCategory(array('scopes' => 'resetScope'));
+        $branch = $orderHeader->branch(array('scopes' => 'resetScope'));
+
+        $criteria = new CDbCriteria;
+        $criteria->compare('order_header_id', $orderHeader->id);
+        $detailsDataProvider = new CActiveDataProvider('OrderDetail', array(
+            'criteria' => $criteria,
+        ));
+
+        $detailsDataProvider->criteria->with = array(
+            'product:resetScope',
+            'unit:resetScope',
+        );
+        $detailsDataProvider->criteria->order = 't.id ASC';
+
+        $newProductsDataProvider = new CActiveDataProvider('OrderNewProduct', array(
+            'criteria' => $criteria,
+        ));
+        
+        $newProductsDataProvider->criteria->with = array(
+            'unit:resetScope',
+        );
+
+        if (isset($_POST['Update'])) {
+            $orderHeader->is_approved = 1;
+            if ($orderHeader->save())
+                $this->redirect(array('view', 'id' => $orderHeader->id));
+        }
+
+        if (isset($_POST['Cleared'])) {
+            $orderHeader->is_hold = 1;
+            if ($orderHeader->save())
+                $this->redirect(array('view', 'id' => $orderHeader->id));
+        }
+
+        if (isset($_POST['Hold'])) {
+            $orderHeader->is_hold = 2;
+            if ($orderHeader->save())
+                $this->redirect(array('view', 'id' => $orderHeader->id));
+        }
+
+        if (isset($_POST['Canceled'])) {
+            $orderHeader->is_hold = 3;
+            if ($orderHeader->save())
+                $this->redirect(array('view', 'id' => $orderHeader->id));
+        }
+
+        $this->render('view', array(
+            'orderHeader' => $orderHeader,
+            'customer' => $customer,
+            'discountCategory' => $discountCategory,
+            'branch' => $branch,
+            'detailsDataProvider' => $detailsDataProvider,
+            'newProductsDataProvider' => $newProductsDataProvider,
+        ));
+    }
+
+    public function actionMemo($id) {
+//		if (!(Yii::app()->user->checkAccess('administrator')))
+//        {
+//            if (!(isset(Yii::app()->session['OrderMemoAllowed']) && Yii::app()->session['OrderMemoAllowed'] === true))
+//                $this->redirect(array('admin'));
+//        }
+//
+//        Yii::app()->session->remove('OrderMemoAllowed');
+        $this->layout = '//layouts/blank';
+        $order = $this->loadModel($id);
+
+        $customer = $order->customer(array('scopes' => 'resetScope'));
+        $branch = $order->branch(array('scopes' => 'resetScope'));
+
+        $orderDetails = $order->orderDetails(array(
+            'with' => array(
+                'product:resetScope',
+                'unit:resetScope',
+            ),
+        ));
+
+        $discountDetailHiddenStatuses = array_fill(1, 5, true);
+        foreach ($orderDetails as $detail) {
+            $discountDetailHiddenStatuses[1] = $discountDetailHiddenStatuses[1] && ((int) $detail->discount_1 === 0);
+            $discountDetailHiddenStatuses[2] = $discountDetailHiddenStatuses[2] && ((int) $detail->discount_2 === 0);
+            $discountDetailHiddenStatuses[3] = $discountDetailHiddenStatuses[3] && ((int) $detail->discount_3 === 0);
+            $discountDetailHiddenStatuses[4] = $discountDetailHiddenStatuses[4] && ((int) $detail->discount_4 === 0);
+            $discountDetailHiddenStatuses[5] = $discountDetailHiddenStatuses[5] && ((int) $detail->discount_5 === 0);
+        }
+        
+        $orderNewProducts = $order->orderNewProducts(array(
+            'with' => array(
+                'unit:resetScope',
+            ),
+        ));
+
+        $discountNewProductHiddenStatuses = array_fill(1, 5, true);
+        foreach ($orderNewProducts as $detail) {
+            $discountNewProductHiddenStatuses[1] = $discountNewProductHiddenStatuses[1] && ((int) $detail->discount_1 === 0);
+            $discountNewProductHiddenStatuses[2] = $discountNewProductHiddenStatuses[2] && ((int) $detail->discount_2 === 0);
+            $discountNewProductHiddenStatuses[3] = $discountNewProductHiddenStatuses[3] && ((int) $detail->discount_3 === 0);
+            $discountNewProductHiddenStatuses[4] = $discountNewProductHiddenStatuses[4] && ((int) $detail->discount_4 === 0);
+            $discountNewProductHiddenStatuses[5] = $discountNewProductHiddenStatuses[5] && ((int) $detail->discount_5 === 0);
+        }
+
+        $this->render('memo', array(
+            'order' => $order,
+            'customer' => $customer,
+            'branch' => $branch,
+            'orderDetails' => $orderDetails,
+            'discountDetailHiddenStatuses' => $discountDetailHiddenStatuses,
+            'orderNewProducts' => $orderNewProducts,
+            'discountNewProductHiddenStatuses' => $discountNewProductHiddenStatuses,
+        ));
+    }
+
+    public function actionMemoOrder($id) {
+        $this->layout = '//layouts/blank';
+        $order = $this->loadModel($id);
+
+        $customer = $order->customer(array('scopes' => 'resetScope'));
+        $branch = $order->branch(array('scopes' => 'resetScope'));
+
+        $orderDetails = $order->orderDetails(array(
+            'with' => array(
+                'product:resetScope',
+                'unit:resetScope',
+            ),
+            'order' => 'orderDetails.id ASC',
+        ));
+
+        $discountDetailHiddenStatuses = array_fill(1, 5, true);
+        foreach ($orderDetails as $detail) {
+            $discountDetailHiddenStatuses[1] = $discountDetailHiddenStatuses[1] && ((int) $detail->discount_1 === 0);
+            $discountDetailHiddenStatuses[2] = $discountDetailHiddenStatuses[2] && ((int) $detail->discount_2 === 0);
+            $discountDetailHiddenStatuses[3] = $discountDetailHiddenStatuses[3] && ((int) $detail->discount_3 === 0);
+            $discountDetailHiddenStatuses[4] = $discountDetailHiddenStatuses[4] && ((int) $detail->discount_4 === 0);
+            $discountDetailHiddenStatuses[5] = $discountDetailHiddenStatuses[5] && ((int) $detail->discount_5 === 0);
+        }
+        
+        $orderNewProducts = $order->orderNewProducts(array(
+            'with' => array(
+                'unit:resetScope',
+            ),
+        ));
+
+        $discountNewProductHiddenStatuses = array_fill(1, 5, true);
+        foreach ($orderNewProducts as $detail) {
+            $discountNewProductHiddenStatuses[1] = $discountNewProductHiddenStatuses[1] && ((int) $detail->discount_1 === 0);
+            $discountNewProductHiddenStatuses[2] = $discountNewProductHiddenStatuses[2] && ((int) $detail->discount_2 === 0);
+            $discountNewProductHiddenStatuses[3] = $discountNewProductHiddenStatuses[3] && ((int) $detail->discount_3 === 0);
+            $discountNewProductHiddenStatuses[4] = $discountNewProductHiddenStatuses[4] && ((int) $detail->discount_4 === 0);
+            $discountNewProductHiddenStatuses[5] = $discountNewProductHiddenStatuses[5] && ((int) $detail->discount_5 === 0);
+        }
+
+        $this->render('memoOrder', array(
+            'order' => $order,
+            'customer' => $customer,
+            'branch' => $branch,
+            'orderDetails' => $orderDetails,
+            'discountDetailHiddenStatuses' => $discountDetailHiddenStatuses,
+            'orderNewProducts' => $orderNewProducts,
+            'discountNewProductHiddenStatuses' => $discountNewProductHiddenStatuses,
+        ));
+    }
+
+    public function actionReport() {
+        $orderHeader = Search::bind(new OrderHeader('search'), isset($_GET['OrderHeader']) ? $_GET['OrderHeader'] : array());
+
+        $startDate = (isset($_GET['StartDate'])) ? $_GET['StartDate'] : '';
+        $endDate = (isset($_GET['EndDate'])) ? $_GET['EndDate'] : '';
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : '';
+        $currentPage = (isset($_GET['page'])) ? $_GET['page'] : '';
+        $currentSort = (isset($_GET['sort'])) ? $_GET['sort'] : '';
+
+        $orderReport = new OrderReport($orderHeader->search());
+        $orderReport->setupLoading();
+        $orderReport->setupPaging($pageSize, $currentPage);
+        $orderReport->setupSorting();
+        $orderReport->setupFilter($startDate, $endDate);
+
+        $this->render('report', array(
+            'orderReport' => $orderReport,
+            'orderHeader' => $orderHeader,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'currentSort' => $currentSort,
+        ));
+    }
+
+    public function actionAdmin() {
+        $order = Search::bind(new OrderHeader('search'), isset($_GET['OrderHeader']) ? $_GET['OrderHeader'] : array());
+
+        $customerName = isset($_GET['CustomerName']) ? $_GET['CustomerName'] : '';
+        $orderStatus = (isset($_GET['OrderStatus'])) ? $_GET['OrderStatus'] : '';
+
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : 10;
+        $orderHeaderDate = (isset($_GET['OrderHeaderDate'])) ? $_GET['OrderHeaderDate'] : '';
+
+        $dataProvider = $order->search();
+        if ($orderStatus !== '') {
+            $str = ($orderStatus !== '0') ? '' : 'NOT';
+            $dataProvider->criteria->addCondition("{$str} EXISTS (" .
+                "SELECT quantity_single - quantity_purchase AS remaining "
+                . "FROM " . OrderDetail::model()->tableName() . " "
+                . " WHERE order_header_id = t.id AND quantity_single - COALESCE(quantity_purchase, 0) > 0 AND is_inactive = 0
+            )");
+        }
+
+        $dataProvider->criteria->with = array(
+            'branch:resetScope',
+            'customer:resetScope',
+            'admin:resetScope',
+        );
+        
+        if (!empty($customerName)) {
+            $dataProvider->criteria->addCondition('customer.name LIKE :customer_name');
+            $dataProvider->criteria->params[':customer_name'] = "%{$customerName}%";
+        }
+        
+        $dataProvider->criteria->order = 't.id DESC';
+        $dataProvider->pagination->pageSize = $pageSize;
+        
+        if (!empty($orderHeaderDate)) {
+            $dataProvider->criteria->addCondition('t.date = :date');
+            $dataProvider->criteria->params[':date'] = $orderHeaderDate;
+        }
+
+        $buttonTemplate = '{view}';
+        if (Yii::app()->user->checkAccess('orderEdit'))
+            $buttonTemplate .= '{update}';
+        if (Yii::app()->user->checkAccess('administrator'))
+            $buttonTemplate .= '{delete}';
+
+        $this->render('admin', array(
+            'order' => $order,
+            'orderStatus' => $orderStatus,
+            'dataProvider' => $dataProvider,
+            'customerName' => $customerName,
+            'buttonTemplate' => $buttonTemplate,
+        ));
+    }
+
+    public function actionOutstanding() {
+        $order = Search::bind(new OrderHeader('search'), isset($_GET['OrderHeader']) ? $_GET['OrderHeader'] : array());
+
+        $orderHeaderDate = (isset($_GET['OrderHeaderDate'])) ? $_GET['OrderHeaderDate'] : '';
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : 500;
+        $currentPage = (isset($_GET['page'])) ? $_GET['page'] : '';
+
+        $dataProvider = $order->searchByOutstanding();
+        $dataProvider->criteria->with = array(
+            'branch:resetScope',
+            'customer:resetScope',
+            'admin:resetScope',
+        );
+        
+        if (!empty($orderHeaderDate)) {
+            $dataProvider->criteria->addCondition('t.date = :date');
+            $dataProvider->criteria->params[':date'] = $orderHeaderDate;
+        }
+
+        $dataProvider->criteria->order = 't.id ASC';
+        $dataProvider->pagination->pageSize = $pageSize;
+        $dataProvider->pagination->currentPage = $currentPage - 1;
+        
+        $buttonTemplate = '{view}';
+
+        if (isset($_GET['SaveExcel'])) {
+            $this->saveToExcel($dataProvider);
+        }
+
+        if (isset($_GET['ResetFilter'])) {
+            $this->redirect(array('outstanding'));
+        }
+
+        $this->render('outstanding', array(
+            'order' => $order,
+            'dataProvider' => $dataProvider,
+            'orderHeaderDate' => $orderHeaderDate,
+            'buttonTemplate' => $buttonTemplate,
+        ));
+    }
+
+    protected function saveToExcel($dataProvider) {
+        set_time_limit(0);
+        ini_set('memory_limit', '1024M');
+
+        spl_autoload_unregister(array('YiiBase', 'autoload'));
+        include_once Yii::getPathOfAlias('ext.phpexcel.Classes') . DIRECTORY_SEPARATOR . 'PHPExcel.php';
+        spl_autoload_register(array('YiiBase', 'autoload'));
+
+        $objPHPExcel = new PHPExcel();
+
+        $documentProperties = $objPHPExcel->getProperties();
+        $documentProperties->setCreator('Djaja Listrik');
+        $documentProperties->setTitle('SO Outstanding');
+
+        $worksheet = $objPHPExcel->setActiveSheetIndex(0);
+        $worksheet->setTitle('SO Outstanding');
+
+        $worksheet->mergeCells('A1:K1');
+        $worksheet->mergeCells('A2:K2');
+        $worksheet->mergeCells('A3:K3');
+
+        $worksheet->getStyle('A1:K5')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+        $worksheet->getStyle('A1:K5')->getFont()->setBold(true);
+
+        $worksheet->setCellValue('A1', 'Djaja Listrik');
+        $worksheet->setCellValue('A2', 'Sales Order Outstanding');
+
+        $worksheet->getStyle('A4:K4')->getBorders()->getTop()->setBorderStyle(PHPExcel_Style_Border::BORDER_THICK);
+
+        $worksheet->setCellValue('A4', 'Order #');
+        $worksheet->setCellValue('B4', 'Tanggal');
+        $worksheet->setCellValue('C4', 'Customer');
+        $worksheet->setCellValue('D4', 'PO Customer');
+        $worksheet->setCellValue('E4', 'Total');
+        $worksheet->setCellValue('F4', 'Note Internal');
+        $worksheet->setCellValue('G4', 'PO #');
+        $worksheet->setCellValue('H4', 'Pengiriman #');
+        $worksheet->setCellValue('I4', 'Invoice #');
+        $worksheet->setCellValue('J4', 'Total Invoice');
+        $worksheet->setCellValue('K4', 'User');
+
+        $worksheet->getStyle('A4:K4')->getBorders()->getBottom()->setBorderStyle(PHPExcel_Style_Border::BORDER_THICK);
+
+        $counter = 6;
+        foreach ($dataProvider->data as $header) {
+            $worksheet->getStyle("C{$counter}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_RIGHT);
+
+            $worksheet->setCellValue("A{$counter}", CHtml::value($header, 'number'));
+            $worksheet->setCellValue("B{$counter}", CHtml::value($header, 'date'));
+            $worksheet->setCellValue("C{$counter}", CHtml::value($header, 'customer.name'));
+            $worksheet->setCellValue("D{$counter}", CHtml::value($header, 'reference_number'));
+            $worksheet->setCellValue("E{$counter}", CHtml::value($header, 'grandTotal'));
+            $worksheet->setCellValue("F{$counter}", CHtml::value($header, 'note_internal'));
+            $worksheet->setCellValue("G{$counter}", empty($header->purchaseHeaders) ? "N/A" : $header->purchaseHeaders[0]->number);
+            $worksheet->setCellValue("H{$counter}", empty($header->deliveryHeaders) ? "N/A" : $header->deliveryHeaders[0]->number);
+            $worksheet->setCellValue("I{$counter}", empty($header->invoiceHeaders) ? "N/A" : $header->invoiceHeaders[0]->number);
+            $worksheet->setCellValue("J{$counter}", CHtml::value($header, 'totalInvoice'));
+            $worksheet->setCellValue("K{$counter}", CHtml::value($header, 'admin.name'));
+
+            $counter++;
+        }
+
+        for ($col = 'A'; $col !== 'P'; $col++) {
+            $objPHPExcel->getActiveSheet()
+            ->getColumnDimension($col)
+            ->setAutoSize(true);
+        }
+        
+        ob_end_clean();
+        // We'll be outputting an excel file
+        header('Content-type: application/vnd.ms-excel');
+        header('Content-Disposition: attachment;filename="so_outstanding.xls"');
+        header('Cache-Control: max-age=0');
+        
+        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
+        $objWriter->save('php://output');
+
+        Yii::app()->end();
+    }
+
+    public function actionDelete($id) {
+        if (Yii::app()->request->isPostRequest) {
+            $orderHeader = $this->loadModel($id);
+            $purchaseHeader = PurchaseHeader::model()->findByAttributes(array('order_header_id' => $id, 'is_inactive' => 0));
+            $packingListHeader = PackingListHeader::model()->findByAttributes(array('order_header_id' => $id, 'is_inactive' => 0));
+            $deliveryHeader = DeliveryHeader::model()->findByAttributes(array('order_header_id' => $id, 'is_inactive' => 0));
+            
+
+            if ($orderHeader !== null && empty($purchaseHeader) && empty($packingListHeader) && empty($deliveryHeader)) {
+                $orderHeader->is_inactive = !$orderHeader->is_inactive;
+                $orderHeader->update(array('is_inactive'));
+                
+                if (count($orderHeader->orderDetails) > 0) {
+                    foreach ($orderHeader->orderDetails as $detail) {
+                        $detail->is_inactive = ActiveRecord::INACTIVE;
+                        $detail->update(array('is_inactive'));
+                    }
+                }
+                
+                if (count($orderHeader->orderNewProducts) > 0) {
+                    foreach ($orderHeader->orderNewProducts as $detail) {
+                        $detail->is_inactive = ActiveRecord::INACTIVE;
+                        $detail->update(array('is_inactive'));
+                    }
+                }
+                
+                Yii::app()->user->setFlash('success', "Data is deleted!");
+                
+            } else {
+                Yii::app()->user->setFlash('failed', "Data can't be deleted!");
+            }
+                
+            $this->redirect(array('admin'));
+        }
+        else
+            throw new CHttpException(400, 'Invalid request. Please do not repeat this request again.');
+    }
+
+    public function actionAjaxHtmlAddProduct($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+            if (isset($_POST['ProductId']))
+                $order->addDetail($_POST['ProductId']);
+
+            $this->renderPartial('_detail', array(
+                'order' => $order,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlAddEmptyDetail($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+            $detail = new OrderNewProduct();
+            $detail->unit_id = 1;
+            $order->newProducts[] = $detail;
+
+            $this->renderPartial('_newProduct', array(
+                'order' => $order,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxJsonCustomer($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $customerId = (isset($_POST['OrderHeader']['customer_id'])) ? $_POST['OrderHeader']['customer_id'] : '';
+
+            $customer = Customer::model()->findByPk($customerId, array('scopes' => 'resetScope', 'with' => 'discountCategory:resetScope'));
+
+            $object = array(
+                'customer_id' => CHtml::value($customer, 'id'),
+                'customer_name' => CHtml::value($customer, 'name'),
+                'customer_company' => CHtml::value($customer, 'company'),
+                'customer_address_1' => CHtml::value($customer, 'address_1'),
+                'customer_city' => CHtml::value($customer, 'city'),
+                'customer_credit_limit' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($customer, 'remainingCreditLimit')),
+                'customer_discount_category' => CHtml::value($customer, 'discountCategory.name'),
+                'customer_salesman' => CHtml::value($customer, 'salesman.name'),
+            );
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxHtmlRemoveDetail($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+            $this->loadState($order);
+
+            $order->removeDetailAt($index);
+
+            $this->renderPartial('_detail', array(
+                'order' => $order,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxHtmlRemoveNewProduct($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+            $this->loadState($order);
+
+            $order->removeNewProductAt($index);
+
+            $this->renderPartial('_newProduct', array(
+                'order' => $order,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function actionAjaxJsonTotal($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+//			if ($order->details[$index]->quantity >= $order->details[$index]->product->quantity_bulk)
+//			{
+//				if ($order->details[$index]->quantity % $order->details[$index]->product->quantity_bulk > 0)
+//					$order->details[$index]->quantity = $order->details[$index]->product->quantity_bulk;
+//				
+//				$order->details[$index]->unit_id = $order->details[$index]->product->unit_id_bulk;
+//			}
+//			else
+//				$order->details[$index]->unit_id = $order->details[$index]->product->unit_id_single;
+
+            if ($order->details[$index]->unit_id !== $_POST['OrderDetail'][$index]['unit_id'])
+                $order->updateDiscountAt($index);
+
+            $object = array(
+                'quantity' => CHtml::value($order->details[$index], 'quantity'),
+                'unit_id' => CHtml::value($order->details[$index], 'unit_id'),
+                'unit_name' => CHtml::value($order->details[$index], 'unit.name'),
+                'unit_price' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order->details[$index], 'unit_price')),
+                'discount_1' => CHtml::value($order->details[$index], 'discount_1'),
+                'discount_2' => CHtml::value($order->details[$index], 'discount_2'),
+                'discount_3' => CHtml::value($order->details[$index], 'discount_3'),
+                'discount_4' => CHtml::value($order->details[$index], 'discount_4'),
+                'discount_5' => CHtml::value($order->details[$index], 'discount_5'),
+                'total' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order->details[$index], 'total')),
+                'subTotal' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'subTotal')),
+                'tax' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'totalTax')),
+                'grandTotal' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'grandTotal')),
+            );
+
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxJsonTotalNewProduct($id, $index) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+            $object = array(
+                'unit_price' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order->newProducts[$index], 'unit_price')),
+                'total' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order->newProducts[$index], 'total')),
+                'totalNewProduct' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'totalNewProduct')),
+                'tax' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'totalTax')),
+                'grandTotal' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'grandTotal')),
+            );
+
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxJsonGrandTotal($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+            $object = array(
+                'tax' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'totalTax')),
+                'grandTotal' => Yii::app()->numberFormatter->format('#,##0.00', CHtml::value($order, 'grandTotal')),
+            );
+
+            echo CJSON::encode($object);
+        }
+    }
+
+    public function actionAjaxHtmlUpdateAllDiscountTax($id) {
+        if (Yii::app()->request->isAjaxRequest) {
+            $order = $this->instantiate($id);
+
+            $this->loadState($order);
+
+            $order->updateDiscount();
+            $order->updateTax();
+
+            $this->renderPartial('_detail', array(
+                'order' => $order,
+                'error' => false,
+            ));
+        }
+    }
+
+    public function instantiate($id) {
+        if (empty($id))
+            $order = new Order(new OrderHeader(), array(), array());
+        else {
+            $orderHeader = $this->loadModel($id);
+            $order = new Order($orderHeader, $orderHeader->orderDetails(array('scopes' => 'resetScope')), $orderHeader->orderNewProducts(array('scopes' => 'resetScope')));
+        }
+
+        return $order;
+    }
+
+    public function loadModel($id) {
+        $model = OrderHeader::model()->findByPk($id);
+        if ($model === null)
+            throw new CHttpException(404, 'The requested page does not exist.');
+        return $model;
+    }
+
+    public function loadState($order) {
+        if (isset($_POST['OrderHeader'])) {
+            $order->header->attributes = $_POST['OrderHeader'];
+        }
+
+        if (isset($_POST['OrderDetail'])) {
+            foreach ($_POST['OrderDetail'] as $i => $item) {
+                if (isset($order->details[$i]))
+                    $order->details[$i]->attributes = $item;
+                else {
+                    $detail = new OrderDetail();
+                    $detail->attributes = $item;
+                    $order->details[] = $detail;
+                }
+            }
+            if (count($_POST['OrderDetail']) < count($order->details))
+                array_splice($order->details, $i + 1);
+        }
+        else
+            $order->details = array();
+
+        if (isset($_POST['OrderNewProduct'])) {
+            foreach ($_POST['OrderNewProduct'] as $i => $item) {
+                if (isset($order->newProducts[$i]))
+                    $order->newProducts[$i]->attributes = $item;
+                else {
+                    $detail = new OrderNewProduct();
+                    $detail->attributes = $item;
+                    $order->newProducts[] = $detail;
+                }
+            }
+            if (count($_POST['OrderNewProduct']) < count($order->newProducts))
+                array_splice($order->newProducts, $i + 1);
+        }
+        else
+            $order->newProducts = array();
+    }
+
+}
+
+?>

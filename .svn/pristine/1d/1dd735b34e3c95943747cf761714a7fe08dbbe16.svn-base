@@ -1,0 +1,84 @@
+<?php
+
+/**
+ * @property integer $id
+ * @property integer $quantity
+ * @property integer $order_detail_id
+ * @property integer $delivery_header_id
+ * @property integer $unit_id
+ * @property integer $is_inactive
+ * @property string $product_name
+ * @property integer $packing_list_detail_id
+ * @property integer $quantity_return
+ *
+ * @property PackingListDetail $packingListDetail
+ * @property DeliveryHeader $deliveryHeader
+ * @property Unit $unit
+ * @property OrderDetail $orderDetail
+ * @property InvoiceDetail[] $invoiceDetails
+ * @property SaleReturnDetail[] $saleReturnDetails
+ */
+class DeliveryDetailBase extends ActiveRecord
+{
+	public function tableName()
+	{
+		return 'tbldl_delivery_detail';
+	}
+
+	public function rules()
+	{
+		return array(
+			array('order_detail_id, delivery_header_id, unit_id, packing_list_detail_id', 'required'),
+			array('quantity, order_detail_id, delivery_header_id, unit_id, is_inactive, packing_list_detail_id, quantity_return', 'numerical', 'integerOnly'=>true),
+			array('product_name', 'length', 'max'=>100),
+			// The following rule is used by search().
+			array('id, quantity, order_detail_id, delivery_header_id, unit_id, is_inactive, product_name, packing_list_detail_id, quantity_return', 'safe', 'on'=>'search'),
+		);
+	}
+
+	public function relations()
+	{
+		return array(
+			'packingListDetail' => array(self::BELONGS_TO, 'PackingListDetail', 'packing_list_detail_id'),
+			'deliveryHeader' => array(self::BELONGS_TO, 'DeliveryHeader', 'delivery_header_id'),
+			'unit' => array(self::BELONGS_TO, 'Unit', 'unit_id'),
+			'orderDetail' => array(self::BELONGS_TO, 'OrderDetail', 'order_detail_id'),
+			'invoiceDetails' => array(self::HAS_MANY, 'InvoiceDetail', 'delivery_detail_id'),
+			'saleReturnDetails' => array(self::HAS_MANY, 'SaleReturnDetail', 'delivery_detail_id'),
+		);
+	}
+
+	public function attributeLabels()
+	{
+		return array(
+			'id' => 'ID',
+			'quantity' => 'Quantity',
+			'order_detail_id' => 'Order Detail',
+			'delivery_header_id' => 'Delivery Header',
+			'unit_id' => 'Unit',
+			'is_inactive' => 'Is Inactive',
+			'product_name' => 'Product Name',
+			'packing_list_detail_id' => 'Packing List Detail',
+			'quantity_return' => 'Quantity Return',
+		);
+	}
+
+	public function search()
+	{
+		$criteria = new CDbCriteria;
+
+		$criteria->compare('id', $this->id);
+		$criteria->compare('quantity', $this->quantity);
+		$criteria->compare('order_detail_id', $this->order_detail_id);
+		$criteria->compare('delivery_header_id', $this->delivery_header_id);
+		$criteria->compare('unit_id', $this->unit_id);
+		$criteria->compare('is_inactive', $this->is_inactive);
+		$criteria->compare('product_name', $this->product_name, true);
+		$criteria->compare('packing_list_detail_id', $this->packing_list_detail_id);
+		$criteria->compare('quantity_return', $this->quantity_return);
+
+		return new CActiveDataProvider($this, array(
+			'criteria'=>$criteria,
+		));
+	}
+}

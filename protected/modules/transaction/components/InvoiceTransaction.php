@@ -1,0 +1,258 @@
+<?php
+
+class InvoiceTransaction extends CComponent {
+
+    public $header;
+    public $details;
+    public $newProducts;
+
+    public function __construct($header, array $details, array $newProducts) {
+        $this->header = $header;
+        $this->details = $details;
+        $this->newProducts = $newProducts;
+    }
+
+    public function addDetail($id) {
+        $deliveryDetail = DeliveryDetail::model()->findByPk($id);
+        $orderDetail = $deliveryDetail->orderDetail;
+
+        if ($deliveryDetail !== null) {
+            $exist = false;
+            foreach ($this->details as $i => $detail) {
+                if ($deliveryDetail->id === $detail->delivery_detail_id) {
+                    $exist = true;
+                    break;
+                }
+            }
+
+            if (!$exist) {
+                $detail = new InvoiceDetail();
+                $detail->delivery_detail_id = $id;
+                $detail->quantity = $deliveryDetail->quantity;
+                $detail->discount_1 = $orderDetail->discount_1;
+                $detail->discount_2 = $orderDetail->discount_2;
+                $detail->discount_3 = $orderDetail->discount_3;
+                $detail->discount_4 = $orderDetail->discount_4;
+                $detail->discount_5 = $orderDetail->discount_5;
+                $detail->unit_price = $orderDetail->unit_price_single;
+                $detail->unit_price_after_discount = $detail->priceAfterDiscount;
+                $this->details[] = $detail;
+            }
+        }
+    }
+
+    public function addNewProduct($id) {
+        $deliveryNewProduct = DeliveryNewProduct::model()->findByPk($id);
+        $orderNewProduct = $deliveryNewProduct->orderNewProduct;
+
+        if ($deliveryNewProduct !== null) {
+            $exist = false;
+            
+            foreach ($this->newProducts as $i => $detail) {
+                if ($deliveryNewProduct->id === $detail->delivery_new_product_id) {
+                    $exist = true;
+                    break;
+                }
+            }
+
+            if (!$exist) {
+                $detail = new InvoiceNewProduct();
+                $detail->delivery_new_product_id = $id;
+                $detail->quantity = $deliveryNewProduct->quantity;
+                $detail->discount_1 = $orderNewProduct->discount_1;
+                $detail->discount_2 = $orderNewProduct->discount_2;
+                $detail->discount_3 = $orderNewProduct->discount_3;
+                $detail->discount_4 = $orderNewProduct->discount_4;
+                $detail->discount_5 = $orderNewProduct->discount_5;
+                $detail->unit_price = $orderNewProduct->unit_price;
+                $detail->unit_price_after_discount = $detail->priceAfterDiscount;
+                $this->newProducts[] = $detail;
+            }
+        }
+    }
+
+    public function removeDetailAt($index) {
+        array_splice($this->details, $index, 1);
+    }
+
+    public function removeNewProductAt($index) {
+        array_splice($this->newProducts, $index, 1);
+    }
+
+    public function save($dbConnection) {
+        $dbTransaction = $dbConnection->beginTransaction();
+        try {
+            $valid = $this->validate() && $this->flush();
+            if ($valid)
+                $dbTransaction->commit();
+            else
+                $dbTransaction->rollback();
+        } catch (Exception $e) {
+            $dbTransaction->rollback();
+            $valid = false;
+            $this->header->addError('error', $e->getMessage());
+        }
+
+        return $valid;
+    }
+
+    public function validate() {
+        $valid = $this->header->validate();
+        $valid = $this->validateDetailsCount() && $valid;
+
+        if ($valid) {
+            if (count($this->details) > 0) {
+                foreach ($this->details as $i => $detail) {
+                    $fields = array('quantity', 'unit_price', 'delivery_detail_id');
+                    $valid = $detail->validate($fields) && $valid;
+                    
+                    if (!$valid) {
+                        foreach ($detail->getErrors() as $errorMessages) {
+                            foreach ($errorMessages as $errorMessage) {
+                                $this->header->addError('error', 'Detail Row ' . $i . ': ' . $errorMessage);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (count($this->newProducts) > 0) {
+                foreach ($this->newProducts as $i => $detail) {
+                    $fields = array('quantity', 'unit_price', 'delivery_new_product_id');
+                    $valid = $detail->validate($fields) && $valid;
+                    
+                    if (!$valid) {
+                        foreach ($detail->getErrors() as $errorMessages) {
+                            foreach ($errorMessages as $errorMessage) {
+                                $this->header->addError('error', 'Detail Row ' . $i . ': ' . $errorMessage);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $valid;
+    }
+
+    public function validateDetailsCount() {
+        $valid = true;
+        if (count($this->details) === 0 && count($this->newProducts) === 0) {
+            $valid = false;
+            $this->header->addError('error', 'Form tidak ada data untuk insert database. Minimal satu data detail untuk melakukan penyimpanan.');
+        }
+
+        return $valid;
+    }
+
+//    public function validateDetailsUnique() {
+//        $valid = true;
+//
+//        $detailsCount = count($this->details);
+//        for ($i = 0; $i < $detailsCount; $i++) {
+//            for ($j = $i; $j < $detailsCount; $j++) {
+//                if ($i === $j)
+//                    continue;
+//
+//                if ($this->details[$i]->product_id === $this->details[$j]->product_id &&
+//                        $this->details[$i]->unit_id === $this->details[$j]->unit_id) {
+//                    $valid = false;
+//                    $this->header->addError('error', 'Nama Produk dan Unit tidak boleh sama.');
+//                    break;
+//                }
+//            }
+//        }
+//
+//        return $valid;
+//    }
+
+    public function flush() {
+        
+        $this->header->due_date = date('Y-m-d', strtotime("+" . $this->header->payment_term . " days", strtotime($this->header->date)));
+        $this->header->grand_total = $this->getGrandTotal();
+        if ($this->header->is_tax == 1 && $this->header->tax_percentage == 0) {
+            $this->header->is_approved = 1; 
+            $this->header->tax_number = '000.00-0000';
+        }
+        $valid = $this->header->save(false);
+
+        foreach ($this->details as $detail) {
+            if ($detail->quantity <= 0) {
+                continue;
+            }
+
+            if ($detail->isNewRecord) {
+                $detail->invoice_header_id = $this->header->id;
+            }
+
+            $valid = $detail->save(false) && $valid;
+            
+            $orderDetail = $detail->deliveryDetail->orderDetail;
+            $orderDetail->quantity_invoice = $orderDetail->totalQuantityInvoice;
+            $valid = $orderDetail->update(array('quantity_invoice')) && $valid;
+
+        }
+
+        foreach ($this->newProducts as $detail) {
+            if ($detail->quantity <= 0)
+                continue;
+
+            if ($detail->isNewRecord) {
+                $detail->invoice_header_id = $this->header->id;
+            }
+
+            $valid = $detail->save(false) && $valid;
+            
+            $orderNewProduct = $detail->deliveryNewProduct->orderNewProduct;
+            $orderNewProduct->quantity_invoice = $orderNewProduct->totalQuantityInvoice;
+            $valid = $orderNewProduct->update(array('quantity_invoice')) && $valid;
+
+        }
+
+        return $valid;
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->details as $detail) {
+            if ((int) $detail->is_inactive === ActiveRecord::ACTIVE) {
+                $total += $detail->total;
+            }
+        }
+
+        return $total;
+    }
+
+    public function getTotalNewProduct() {
+        $total = 0.00;
+
+        foreach ($this->newProducts as $newProduct) {
+            if ((int) $newProduct->is_inactive === ActiveRecord::ACTIVE) {
+                $total += $newProduct->total;
+            }
+        }
+
+        return $total;
+    }
+
+    public function getSubTotal() {
+        $subTotal = $this->totalDetail + $this->totalNewProduct;
+
+        if ((int) $this->header->is_tax === OrderHeader::TAX && (int) $this->header->is_include === OrderHeader::INCLUDE_TAX) {
+            $subTotal = $subTotal / (1 + ($this->header->tax_percentage / 100));
+        }
+
+        return $subTotal;
+    }
+
+    public function getTotalTax() {
+
+        return ((int) $this->header->is_tax == OrderHeader::TAX) ? $this->subTotal * $this->header->tax_percentage / 100 : 0;
+    }
+
+    public function getGrandTotal() {
+        
+        return $this->subTotal + $this->totalTax;
+    }
+}

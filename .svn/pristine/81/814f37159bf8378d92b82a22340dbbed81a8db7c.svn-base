@@ -1,0 +1,132 @@
+<?php
+
+class SaleReceipt extends CComponent {
+
+    public $header;
+    public $details;
+
+    public function __construct($header, array $details) {
+        $this->header = $header;
+        $this->details = $details;
+    }
+
+    public function addInvoice($invoiceId) {
+
+        $exist = FALSE;
+        $invoiceHeader = InvoiceHeader::model()->findByPk($invoiceId);
+
+        if ($invoiceHeader != null) {
+            foreach ($this->details as $detail) {
+                if ($detail->invoice_header_id == $invoiceHeader->id) {
+                    $exist = TRUE;
+                    break;
+                }
+            }
+
+            if (!$exist) {
+                $detail = new SaleReceiptDetail;
+                $detail->invoice_header_id = $invoiceId;
+                $detail->invoice_amount = $invoiceHeader->remaining;
+                $this->details[] = $detail;
+            }
+        }
+    }
+
+    public function removeDetailAt($index) {
+        array_splice($this->details, $index, 1);
+    }
+
+    public function resetDetail() {
+        $this->details = array();
+    }
+
+    public function save($dbConnection) {
+        $dbTransaction = $dbConnection->beginTransaction();
+        try {
+            $valid = $this->validate() && $this->flush();
+            if ($valid)
+                $dbTransaction->commit();
+            else
+                $dbTransaction->rollback();
+        } catch (Exception $e) {
+            $dbTransaction->rollback();
+            $valid = false;
+        }
+
+        return $valid;
+    }
+
+    public function flush() {
+        $this->header->total_invoice = $this->totalDetail;
+
+        $valid = $this->header->save(false);
+
+        foreach ($this->details as $detail) {
+            if ($detail->isNewRecord) {
+                $detail->sale_receipt_header_id = $this->header->id;
+            }
+
+            $valid = $detail->save(false) && $valid;
+        }
+
+        return $valid;
+    }
+
+    public function validate() {
+        $valid = $this->header->validate();
+
+        $valid = $this->validateDetailsCount() && $valid;
+        $valid = $this->validateDetailsUnique() && $valid;
+
+        if (count($this->details) > 0) {
+            foreach ($this->details as $detail) {
+                $fields = array('invoice_header_id');
+                $valid = $detail->validate($fields) && $valid;
+            }
+        } else
+            $valid = false;
+
+        return $valid;
+    }
+
+    public function validateDetailsCount() {
+        $valid = true;
+        if (count($this->details) === 0) {
+            $valid = false;
+            $this->header->addError('error', 'Form tidak ada data untuk insert database. Minimal satu data detail untuk melakukan penyimpanan.');
+        }
+
+        return $valid;
+    }
+
+    public function validateDetailsUnique() {
+        $valid = true;
+
+        $detailsCount = count($this->details);
+        for ($i = 0; $i < $detailsCount; $i++) {
+            for ($j = $i; $j < $detailsCount; $j++) {
+                if ($i === $j)
+                    continue;
+
+                if ($this->details[$i]->invoice_header_id === $this->details[$j]->invoice_header_id) {
+                    $valid = false;
+                    $this->header->addError('error', 'Invoice tidak boleh sama.');
+                    break;
+                }
+            }
+        }
+
+        return $valid;
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->details as $detail) {
+            $total += $detail->invoice_amount;
+        }
+
+        return $total;
+    }
+
+}

@@ -1,0 +1,135 @@
+<?php
+
+class SalePaymentController extends Controller {
+
+    public function filters() {
+        return array(
+            'access',
+        );
+    }
+
+    public function filterAccess($filterChain) {
+        if ($filterChain->action->id === 'report') {
+            if (!(Yii::app()->user->checkAccess('salePaymentReport')))
+                $this->redirect(array('/site/login'));
+        }
+
+        $filterChain->run();
+    }
+
+    public function actionReport() {
+        $salePaymentHeader = Search::bind(new SalePaymentHeader('search'), isset($_GET['SalePaymentHeader']) ? $_GET['SalePaymentHeader'] : array());
+
+        $startDate = (isset($_GET['StartDate'])) ? $_GET['StartDate'] : date('Y-m-d');
+        $endDate = (isset($_GET['EndDate'])) ? $_GET['EndDate'] : date('Y-m-d');
+        $pageSize = (isset($_GET['PageSize'])) ? $_GET['PageSize'] : '';
+        $currentPage = (isset($_GET['page'])) ? $_GET['page'] : '';
+        $currentSort = (isset($_GET['sort'])) ? $_GET['sort'] : '';
+
+        $salePaymentReport = new SalePaymentReport($salePaymentHeader->search());
+        $salePaymentReport->setupLoading();
+        $salePaymentReport->setupPaging($pageSize, $currentPage);
+        $salePaymentReport->setupSorting();
+        $salePaymentReport->setupFilter($startDate, $endDate);
+
+        if (isset($_GET['SaveExcel'])) {
+            $this->saveToExcel($salePaymentReport->dataProvider, array(
+                'startDate' => $startDate, 
+                'endDate' => $endDate,
+            ));
+        }
+
+        $this->render('report', array(
+            'salePaymentReport' => $salePaymentReport,
+            'salePaymentHeader' => $salePaymentHeader,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'currentSort' => $currentSort,
+        ));
+    }
+    
+    protected function saveToExcel($dataProvider, array $options = array()) {
+        set_time_limit(0);
+        ini_set('memory_limit', '1024M');
+
+        spl_autoload_unregister(array('YiiBase', 'autoload'));
+        include_once Yii::getPathOfAlias('ext.phpexcel.Classes') . DIRECTORY_SEPARATOR . 'PHPExcel.php';
+        spl_autoload_register(array('YiiBase', 'autoload'));
+
+        $objPHPExcel = new PHPExcel();
+
+        $startDate = $options['startDate'];
+        $endDate = $options['endDate'];
+        
+        $documentProperties = $objPHPExcel->getProperties();
+        $documentProperties->setCreator('Djaja Listrik');
+        $documentProperties->setTitle('Pelunasan Penjualan');
+
+        $worksheet = $objPHPExcel->setActiveSheetIndex(0);
+        $worksheet->setTitle('Pelunasan Penjualan');
+
+        $worksheet->mergeCells('A1:J1');
+        $worksheet->mergeCells('A2:J2');
+        $worksheet->mergeCells('A3:J3');
+
+        $worksheet->getStyle('A1:J5')->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+        $worksheet->getStyle('A1:J5')->getFont()->setBold(true);
+
+        $worksheet->setCellValue('A1', 'Djaja Listrik');
+        $worksheet->setCellValue('A2', 'Pelunasan Penjualan');
+        $worksheet->setCellValue('A3', Yii::app()->dateFormatter->format('d MMMM yyyy', strtotime($startDate)) . ' - ' . Yii::app()->dateFormatter->format('d MMMM yyyy', strtotime($endDate)));
+
+        $worksheet->getStyle('A5:J5')->getBorders()->getTop()->setBorderStyle(PHPExcel_Style_Border::BORDER_THICK);
+
+        $worksheet->setCellValue('A5', 'Pembayaran #');
+        $worksheet->setCellValue('B5', 'Tanggal');
+        $worksheet->setCellValue('C5', 'Customer');
+        $worksheet->setCellValue('D5', 'Catatan');
+        $worksheet->setCellValue('E5', 'Invoice #');
+        $worksheet->setCellValue('F5', 'F. Pajak #');
+        $worksheet->setCellValue('G5', 'Tanggal Invoice');
+        $worksheet->setCellValue('H5', 'Jenis Pembayaran');
+        $worksheet->setCellValue('I5', 'Jumlah');
+        $worksheet->setCellValue('J5', 'Memo');
+
+        $worksheet->getStyle('A5:J5')->getBorders()->getBottom()->setBorderStyle(PHPExcel_Style_Border::BORDER_THICK);
+
+        $counter = 7;
+        foreach ($dataProvider->data as $header) {
+        foreach ($header->salePaymentDetails as $detail) {
+            $worksheet->getStyle("H{$counter}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_RIGHT);
+
+            $worksheet->setCellValue("A{$counter}", CHtml::value($header, 'number'));
+            $worksheet->setCellValue("B{$counter}", CHtml::value($header, 'date'));
+            $worksheet->setCellValue("C{$counter}", CHtml::value($header, 'customer.company'));
+            $worksheet->setCellValue("D{$counter}", CHtml::value($header, 'note'));
+            $worksheet->setCellValue("E{$counter}", CHtml::value($detail, 'invoiceHeader.number'));
+            $worksheet->setCellValue("F{$counter}", CHtml::value($detail, 'invoiceHeader.tax_number'));
+            $worksheet->setCellValue("G{$counter}", CHtml::value($detail, 'invoiceHeader.date'));
+            $worksheet->setCellValue("H{$counter}", CHtml::value($detail, 'paymentType.name'));
+            $worksheet->setCellValue("I{$counter}", CHtml::value($detail, 'amount'));
+            $worksheet->setCellValue("J{$counter}", CHtml::value($detail, 'memo'));
+
+            $counter++;
+        }
+        }
+
+        for ($col = 'A'; $col !== 'P'; $col++) {
+            $objPHPExcel->getActiveSheet()
+            ->getColumnDimension($col)
+            ->setAutoSize(true);
+        }
+        
+        ob_end_clean();
+        // We'll be outputting an excel file
+        header('Content-type: application/vnd.ms-excel');
+        header('Content-Disposition: attachment;filename="pelunasan_penjualan.xls"');
+        header('Cache-Control: max-age=0');
+        
+        $objWriter = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel5');
+        $objWriter->save('php://output');
+
+        Yii::app()->end();
+    }
+}
+?>

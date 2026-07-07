@@ -1,0 +1,26 @@
+<?php
+
+class SalePaymentHeader extends SalePaymentHeaderBase {
+
+    public static function model($className = __CLASS__) {
+        return parent::model($className);
+    }
+
+    public function getTotalReceipt() {
+        return ($this->saleReceiptHeader === null) ? 0.00 : $this->saleReceiptHeader->totalDetail;
+    }
+
+    public function getTotalDetail() {
+        $total = 0.00;
+
+        foreach ($this->salePaymentDetails as $detail)
+            $total += $detail->amount;
+
+        return $total;
+    }
+
+    public function getTotalInvoice() {
+        return ($this->invoice === null) ? 0.00 : $this->invoice->totalDetail;
+    }
+
+}
