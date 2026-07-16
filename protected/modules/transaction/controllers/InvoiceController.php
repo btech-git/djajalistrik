@@ -569,13 +569,25 @@ class InvoiceController extends Controller {
             $salePaymentHeader = SalePaymentHeader::model()->findByAttributes(array('invoice_header_id' => $id, 'is_inactive' => 0));
             
             if ($invoiceHeader !== null && empty($salePaymentHeader)) {
-                $invoiceHeader->is_inactive = !$invoiceHeader->is_inactive;
-                $invoiceHeader->update(array('is_inactive'));
+                $invoiceHeader->is_inactive = ActiveRecord::INACTIVE;
+                $invoiceHeader->grand_total = '0.00';
+                $invoiceHeader->total_payment = '0.00';
+                $invoiceHeader->deposit = '0.00';
+                $invoiceHeader->shipping_fee = '0.00';
+                $invoiceHeader->update(array('is_inactive', 'grand_total', 'total_payment', 'deposit', 'shipping_fee'));
                 
                 if (count($invoiceHeader->invoiceDetails) > 0) {
                     foreach ($invoiceHeader->invoiceDetails as $detail) {
                         $detail->is_inactive = ActiveRecord::INACTIVE;
-                        $detail->update(array('is_inactive'));
+                        $detail->quantity = '0.00';
+                        $detail->unit_price = '0.00';
+                        $detail->unit_price_after_discount = '0.00';
+                        $detail->discount_1 = '0.00';
+                        $detail->discount_2 = '0.00';
+                        $detail->discount_3 = '0.00';
+                        $detail->discount_4 = '0.00';
+                        $detail->discount_5 = '0.00';
+                        $detail->update(array('is_inactive', 'quantity', 'unit_price', 'unit_price_after_discount', 'discount_1', 'discount_2', 'discount_3', 'discount_4', 'discount_5'));
             
                         $orderDetail = $detail->deliveryDetail->orderDetail;
                         $orderDetail->quantity_invoice = $orderDetail->totalQuantityInvoice;
@@ -586,7 +598,15 @@ class InvoiceController extends Controller {
                 if (count($invoiceHeader->invoiceNewProducts) > 0) {
                     foreach ($invoiceHeader->invoiceNewProducts as $detail) {
                         $detail->is_inactive = ActiveRecord::INACTIVE;
-                        $detail->update(array('is_inactive'));
+                        $detail->quantity = '0.00';
+                        $detail->unit_price = '0.00';
+                        $detail->unit_price_after_discount = '0.00';
+                        $detail->discount_1 = '0.00';
+                        $detail->discount_2 = '0.00';
+                        $detail->discount_3 = '0.00';
+                        $detail->discount_4 = '0.00';
+                        $detail->discount_5 = '0.00';
+                        $detail->update(array('is_inactive', 'quantity', 'unit_price', 'unit_price_after_discount', 'discount_1', 'discount_2', 'discount_3', 'discount_4', 'discount_5'));
             
                         $orderNewProduct = $detail->deliveryNewProduct->orderNewProduct;
                         $orderNewProduct->quantity_invoice = $orderNewProduct->totalQuantityInvoice;
@@ -595,11 +615,12 @@ class InvoiceController extends Controller {
                 }
             }
 
-            if (!isset($_GET['ajax']))
+            if (!isset($_GET['ajax'])) {
                 $this->redirect(isset($_POST['returnUrl']) ? $_POST['returnUrl'] : array('admin'));
-        }
-        else
+            }
+        } else {
             throw new CHttpException(400, 'Invalid request. Please do not repeat this request again.');
+        }
     }
 
     public function actionAjaxHtmlAddDeliveryDetails($id) {

@@ -203,7 +203,10 @@ class SalePaymentController extends Controller {
 
             foreach ($salePayment->salePaymentDetails as $detail) {
                 $detail->is_inactive = ActiveRecord::INACTIVE;
-                $detail->update(array('is_inactive'));
+                $detail->amount = '0.00';
+                $detail->total_invoice = '0.00';
+                $detail->additional_amount = '0.00';
+                $detail->update(array('is_inactive', 'amount', 'total_invoice', 'additional_amount'));
 
                 $invoiceHeader = $detail->invoiceHeader; 
                 $invoiceHeader->total_payment = $invoiceHeader->getTotalPayment();
