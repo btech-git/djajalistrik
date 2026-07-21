@@ -4498,3 +4498,24 @@ Stack trace:
 REQUEST_URI=/~pmahendro/djajalistrik/index.php?r=admin/customer/view&id=1552
 HTTP_REFERER=http://localhost/~pmahendro/djajalistrik/index.php?r=admin/customer/admin
 ---
+2026/07/21 13:01:37 [error] [exception.CHttpException.404] exception 'CHttpException' with message 'The requested page does not exist.' in /home/pmahendro/public_html/djajalistrik/protected/modules/transaction/controllers/InvoiceController.php:786
+Stack trace:
+#0 /home/pmahendro/public_html/djajalistrik/protected/modules/transaction/controllers/InvoiceController.php(198): InvoiceController->loadModel('35642')
+#1 [internal function]: InvoiceController->actionView('35642')
+#2 /home/pmahendro/public_html/yii/framework/web/actions/CAction.php(108): ReflectionMethod->invokeArgs(Object(InvoiceController), Array)
+#3 /home/pmahendro/public_html/yii/framework/web/actions/CInlineAction.php(47): CAction->runWithParamsInternal(Object(InvoiceController), Object(ReflectionMethod), Array)
+#4 /home/pmahendro/public_html/yii/framework/web/CController.php(308): CInlineAction->runWithParams(Array)
+#5 /home/pmahendro/public_html/yii/framework/web/filters/CFilterChain.php(133): CController->runAction(Object(CInlineAction))
+#6 /home/pmahendro/public_html/djajalistrik/protected/modules/transaction/controllers/InvoiceController.php(29): CFilterChain->run()
+#7 /home/pmahendro/public_html/yii/framework/web/filters/CInlineFilter.php(58): InvoiceController->filterAccess(Object(CFilterChain))
+#8 /home/pmahendro/public_html/yii/framework/web/filters/CFilterChain.php(130): CInlineFilter->filter(Object(CFilterChain))
+#9 /home/pmahendro/public_html/yii/framework/web/CController.php(291): CFilterChain->run()
+#10 /home/pmahendro/public_html/yii/framework/web/CController.php(265): CController->runActionWithFilters(Object(CInlineAction), Array)
+#11 /home/pmahendro/public_html/yii/framework/web/CWebApplication.php(282): CController->run('view')
+#12 /home/pmahendro/public_html/yii/framework/web/CWebApplication.php(141): CWebApplication->runController('transaction/inv...')
+#13 /home/pmahendro/public_html/yii/framework/base/CApplication.php(180): CWebApplication->processRequest()
+#14 /home/pmahendro/public_html/djajalistrik/index.php(13): CApplication->run()
+#15 {main}
+REQUEST_URI=/~pmahendro/djajalistrik/index.php?r=transaction/invoice/view&id=35642
+HTTP_REFERER=http://localhost/~pmahendro/djajalistrik/index.php?r=transaction/invoice/admin
+---

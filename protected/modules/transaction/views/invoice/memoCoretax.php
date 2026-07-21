@@ -7,8 +7,8 @@ Yii::app()->clientScript->registerScript('memo', '
 ');
 Yii::app()->clientScript->registerCssFile(Yii::app()->request->baseUrl . '/css/transaction/memo.css');
 Yii::app()->clientScript->registerCss('memo', '
-    .hcolumn1 { width: 50% }
-    .hcolumn2 { width: 50% }
+    .hcolumn1 { width: 48% }
+    .hcolumn2 { width: 48% }
 
     .hcolumn1header { width: 35% }
     .hcolumn1value { width: 65% }
@@ -88,11 +88,11 @@ Yii::app()->clientScript->registerCss('memo', '
 
                         <br/>
 
-                        <div style="background-color:lightgray; margin-left:100px; width: 83.5%; font-size: 150%; font-weight: bold; text-align: center">INVOICE</div>
+                        <div style="background-color:lightgray; margin-left:50px; width: 83.5%; font-size: 150%; font-weight: bold; text-align: center">INVOICE</div>
 
                         <br/>
 
-                        <table style="margin-left:100px; border-left:1px solid black;width: 83.5%; border-right: 1px solid black; border-top: 1px solid black; border-bottom:1px solid black">
+                        <table style="margin-left:50px; border-left:1px solid black;width: 83.5%; border-right: 1px solid black; border-top: 1px solid black; border-bottom:1px solid black">
                             <tr>
                                 <td style="border-bottom:1px solid; background-color:lightgray; font-weight: bold">Invoice No.</td>
                                 <td style="border-bottom:1px solid"><?php echo CHtml::encode($invoice->number); ?></td>
@@ -137,7 +137,7 @@ Yii::app()->clientScript->registerCss('memo', '
 
         <br />
 
-        <table class="memo">
+        <table class="memo" style="width: 95%">
             <tr id="theader">
                 <th style="width: 5%">No</th>
                 <!--<th style="width: 15%">SJ #</th>-->
